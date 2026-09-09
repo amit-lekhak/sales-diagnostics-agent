@@ -49,7 +49,7 @@ export async function paginatedOrders(opts: {
       created_at: string;
     }[]
   >`
-    SELECT o.id, s.name AS store, o.status, o.subtotal::float8 AS subtotal,
+    SELECT o.id, s.name AS store, o.status, o.subtotal,
            o.paid_at::text AS paid_at, o.created_at::text AS created_at
     FROM orders o
     JOIN stores s ON s.id = o.store_id
@@ -81,7 +81,7 @@ export async function paginatedProducts(opts: {
   const rows = await sql<
     { id: number; sku: string; name: string; category: string; unit_price: number }[]
   >`
-    SELECT id, sku, name, category, unit_price::float8 AS unit_price
+    SELECT id, sku, name, category, unit_price
     FROM products p
     WHERE 1=1 ${qFilter}
     ORDER BY name

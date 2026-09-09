@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { money } from '@/lib/format';
+import { money, moneyAxisTick } from '@/lib/format';
 import { ChartFrame } from './ChartFrame';
 
 export function SalesChart({ data }: { data: { day: string; net_sales: number }[] }) {
@@ -28,7 +28,7 @@ export function SalesChart({ data }: { data: { day: string; net_sales: number }[
           <XAxis dataKey="day" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
           <YAxis
             tick={{ fontSize: 11 }}
-            tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+            tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
           <Tooltip formatter={(v) => money(Number(v))} />
           <Bar

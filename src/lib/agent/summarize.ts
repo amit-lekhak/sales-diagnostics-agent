@@ -67,17 +67,21 @@ export async function maybeSummarize(conversationId: string, runId: string) {
     await addSpan({
       runId,
       kind: 'summarize',
-      name: 'summarize',
+      name: 'compaction',
       startedAt: started,
       payloadIn: { turns: older.length },
-      payloadOut: { chars: text.length },
+      payloadOut: {
+        chars: text.length,
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+      },
       tokenCount: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
     });
   } catch (err) {
     await addSpan({
       runId,
       kind: 'summarize',
-      name: 'summarize',
+      name: 'compaction',
       startedAt: started,
       error: err instanceof Error ? err.message : String(err),
     });

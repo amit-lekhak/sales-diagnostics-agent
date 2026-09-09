@@ -217,7 +217,17 @@ export async function POST(req: Request) {
         name: MODEL,
         startedAt: new Date(started),
         endedAt: new Date(),
-        payloadOut: { chars: bodyText.length },
+        payloadIn: {
+          message: body.message,
+          history: messages.length,
+          scope,
+          page: page.page,
+        },
+        payloadOut: {
+          chars: bodyText.length,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+        },
         tokenCount: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
       });
       const [msg] = await sql<{ id: string }[]>`

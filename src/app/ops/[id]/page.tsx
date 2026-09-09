@@ -1,4 +1,5 @@
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { dateTime, num, spanRange } from '@/lib/format';
 import { runById, runSpans } from '@/lib/queries';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -27,14 +28,14 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <span className="text-(--muted)">Latency</span>{' '}
           {run.latency_ms != null ? `${run.latency_ms} ms` : '—'}
           {' · '}
-          <span className="text-(--muted)">Tokens</span> {run.input_tokens ?? 0} /{' '}
-          {run.output_tokens ?? 0}
+          <span className="text-(--muted)">Prompt / completion</span>{' '}
+          {num(run.input_tokens ?? 0)} / {num(run.output_tokens ?? 0)}
         </p>
         <p className="mt-1 text-(--muted)">
           {run.model}
           {run.scope ? ` · ${run.scope}` : ''}
           {' · '}
-          {run.created_at.slice(0, 19).replace('T', ' ')}
+          {dateTime(run.created_at)}
         </p>
         {run.error && <p className="mt-2 text-orange-800">{run.error}</p>}
       </section>
@@ -53,8 +54,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                 {s.kind} · {s.name}
               </p>
               <p className="text-xs text-(--muted)">
-                {s.started_at} → {s.ended_at ?? 'open'}
-                {s.token_count != null ? ` · ${s.token_count} tokens` : ''}
+                {spanRange(s.started_at, s.ended_at)}
+                {spanTokenLabel(s)}
               </p>
               {s.error && <p className="mt-2 text-orange-800">{s.error}</p>}
               <pre className="mt-2 max-h-48 overflow-auto rounded bg-stone-100 p-2 text-xs">
@@ -66,4 +67,25 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       )}
     </div>
   );
+}
+
+function spanTokenLabel(s: {
+  kind: string;
+  token_count: number | null;
+  output: unknown;
+}): string {
+  const out =
+    s.output && typeof s.output === 'object' && !Array.isArray(s.output)
+      ? (s.output as Record<string, unknown>)
+      : null;
+  const inn = typeof out?.inputTokens === 'number' ? out.inputTokens : null;
+  const o = typeof out?.outputTokens === 'number' ? out.outputTokens : null;
+  const compaction = s.kind === 'summarize' ? ' (compaction, not in run total)' : '';
+  if (inn != null || o != null) {
+    return ` · ${num(inn ?? 0)} in / ${num(o ?? 0)} out${compaction}`;
+  }
+  if (s.token_count != null) {
+    return ` · ${num(s.token_count)} tokens${compaction}`;
+  }
+  return '';
 }

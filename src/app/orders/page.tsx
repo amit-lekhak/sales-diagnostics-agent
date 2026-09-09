@@ -1,6 +1,6 @@
 import { FilterBar, Pagination } from '@/components/dashboard/FilterBar';
 import { EmptyState } from '@/components/dashboard/EmptyState';
-import { money } from '@/lib/format';
+import { dateTime, money } from '@/lib/format';
 import { listStores, paginatedOrders } from '@/lib/queries';
 import { qs, rangeFromSearch, spStr } from '@/lib/search';
 
@@ -64,9 +64,7 @@ export default async function OrdersPage({
                   <td className="px-3 py-2">{r.store}</td>
                   <td className="px-3 py-2">{r.status}</td>
                   <td className="px-3 py-2">{money(r.subtotal)}</td>
-                  <td className="px-3 py-2">
-                    {r.created_at.slice(0, 16).replace('T', ' ')}
-                  </td>
+                  <td className="px-3 py-2">{dateTime(r.created_at)}</td>
                 </tr>
               ))}
             </tbody>

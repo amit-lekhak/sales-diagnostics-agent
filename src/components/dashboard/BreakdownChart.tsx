@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { money } from '@/lib/format';
+import { money, moneyAxisTick, num } from '@/lib/format';
 import { ChartFrame } from './ChartFrame';
 
 export function BreakdownChart({
@@ -37,7 +37,7 @@ export function BreakdownChart({
           <XAxis
             type="number"
             tick={{ fontSize: 11 }}
-            tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+            tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
           <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11 }} />
           <Tooltip formatter={(v) => money(Number(v))} />
@@ -83,7 +83,7 @@ export function WaterfallChart({ data }: { data: { label: string; delta: number 
           <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
           <YAxis
             tick={{ fontSize: 11 }}
-            tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+            tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
           <Tooltip
             formatter={(v, name) =>
@@ -154,10 +154,14 @@ export function VolumeSalesChart({
           <YAxis
             yAxisId="sales"
             tick={{ fontSize: 11 }}
-            tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+            tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
           <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 11 }} />
-          <Tooltip />
+          <Tooltip
+            formatter={(v, name) =>
+              name === 'Net sales' ? money(Number(v)) : num(Number(v))
+            }
+          />
           <Bar yAxisId="sales" dataKey="net_sales" fill="#0f766e" name="Net sales" />
           <Bar yAxisId="units" dataKey="units" fill="#d6d3d1" name="Units" />
         </BarChart>

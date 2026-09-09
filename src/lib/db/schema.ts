@@ -40,7 +40,7 @@ export const products = pgTable('products', {
   sku: varchar('sku', { length: 32 }).notNull(),
   name: varchar('name', { length: 160 }).notNull(),
   category: varchar('category', { length: 80 }).notNull(),
-  unitPrice: doublePrecision('unit_price').notNull(),
+  unitPrice: integer('unit_price').notNull(),
 });
 
 export const promotions = pgTable('promotions', {
@@ -61,7 +61,7 @@ export const orders = pgTable(
       .references(() => stores.id),
     status: varchar('status', { length: 24 }).notNull(),
     paidAt: timestamp('paid_at', { withTimezone: true }),
-    subtotal: doublePrecision('subtotal').notNull(),
+    subtotal: integer('subtotal').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (t) => [
@@ -81,8 +81,8 @@ export const orderItems = pgTable(
       .notNull()
       .references(() => products.id),
     qty: integer('qty').notNull(),
-    unitPrice: doublePrecision('unit_price').notNull(),
-    lineTotal: doublePrecision('line_total').notNull(),
+    unitPrice: integer('unit_price').notNull(),
+    lineTotal: integer('line_total').notNull(),
   },
   (t) => [
     index('order_items_order_idx').on(t.orderId),
@@ -97,10 +97,10 @@ export const storeDayMetrics = pgTable(
       .notNull()
       .references(() => stores.id),
     day: date('day').notNull(),
-    netSales: doublePrecision('net_sales').notNull(),
+    netSales: integer('net_sales').notNull(),
     units: integer('units').notNull(),
     orderCount: integer('order_count').notNull(),
-    avgPrice: doublePrecision('avg_price').notNull(),
+    avgPrice: integer('avg_price').notNull(),
   },
   (t) => [
     uniqueIndex('store_day_metrics_pk').on(t.storeId, t.day),

@@ -128,7 +128,7 @@ async function seedDimensions() {
           sku: `NS-${String(skuN).padStart(4, '0')}`,
           name: variant === 1 ? name : `${name} XL`,
           category,
-          unit_price: Math.round((40 + rand() * 420) * 100) / 100,
+          unit_price: Math.round((40 + rand() * 420) * 100),
         });
         skuN += 1;
       }
@@ -221,20 +221,20 @@ async function seedOrders(
             product = pick(products.filter((p) => p.id !== shieldId));
           }
           const qty = 1 + Math.floor(rand() * 3);
-          const unitPrice = product.unit_price * (0.92 + rand() * 0.12);
+          const unitPrice = Math.round(product.unit_price * (0.92 + rand() * 0.12));
           subtotal += qty * unitPrice;
           itemPlan.push({
             orderIndex: thisOrderIndex,
             productId: product.id,
             qty,
-            unitPrice: Math.round(unitPrice * 100) / 100,
+            unitPrice,
           });
         }
         orderBatch.push({
           store_id: store.id,
           status,
           paid_at: status === 'paid' ? paid : (null as unknown as Date),
-          subtotal: Math.round(subtotal * 100) / 100,
+          subtotal,
           created_at: paid,
         });
         planned += 1;
@@ -270,7 +270,7 @@ async function flushOrders(
     product_id: it.productId,
     qty: it.qty,
     unit_price: it.unitPrice,
-    line_total: Math.round(it.qty * it.unitPrice * 100) / 100,
+    line_total: it.qty * it.unitPrice,
   }));
   for (let i = 0; i < rows.length; i += 1000) {
     await sql`INSERT INTO order_items ${sql(rows.slice(i, i + 1000))}`;
@@ -285,7 +285,7 @@ async function rollupMetrics() {
            SUM(oi.line_total),
            SUM(oi.qty),
            COUNT(DISTINCT o.id),
-           SUM(oi.line_total) / NULLIF(SUM(oi.qty), 0)
+           ROUND(SUM(oi.line_total)::numeric / NULLIF(SUM(oi.qty), 0))::int
     FROM orders o
     JOIN order_items oi ON oi.order_id = o.id
     WHERE o.status = 'paid' AND o.paid_at IS NOT NULL

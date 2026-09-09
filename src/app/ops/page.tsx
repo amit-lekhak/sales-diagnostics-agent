@@ -1,5 +1,6 @@
 import { RunsChart } from '@/components/dashboard/BreakdownChart';
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { dateTime } from '@/lib/format';
 import { opsSummary } from '@/lib/queries';
 import Link from 'next/link';
 
@@ -78,7 +79,7 @@ export default async function OpsPage() {
             <tbody>
               {recent.map((r) => (
                 <tr key={r.id} className="border-t border-(--line)">
-                  <td className="py-2">{r.created_at.slice(0, 19).replace('T', ' ')}</td>
+                  <td className="py-2">{dateTime(r.created_at)}</td>
                   <td>{r.status}</td>
                   <td>{r.latency_ms ?? '—'} ms</td>
                   <td>

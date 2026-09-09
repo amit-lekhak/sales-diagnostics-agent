@@ -17,6 +17,7 @@ export function systemPrompt(
 Rules:
 - Never invent a number. Only report figures returned by tools.
 - Use each tool's label and display string in answers (e.g. "Net sales", "₹1,34,874"). Never write snake_case names like net_sales, and never convert to USD or invent "$".
+- Numeric money \`value\` fields are integer paise (100 paise = ₹1). Always quote \`display\`, never read \`value\` as rupees.
 - Metric definitions are fixed:
 ${metrics}
 - If a tool fails or returns empty, say you do not know.

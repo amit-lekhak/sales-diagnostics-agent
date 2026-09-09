@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS products (
   sku varchar(32) NOT NULL,
   name varchar(160) NOT NULL,
   category varchar(80) NOT NULL,
-  unit_price double precision NOT NULL
+  unit_price integer NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS promotions (
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS orders (
   store_id integer NOT NULL REFERENCES stores(id),
   status varchar(24) NOT NULL,
   paid_at timestamptz,
-  subtotal double precision NOT NULL,
+  subtotal integer NOT NULL,
   created_at timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS orders_store_paid_idx ON orders (store_id, paid_at);
@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   order_id integer NOT NULL REFERENCES orders(id),
   product_id integer NOT NULL REFERENCES products(id),
   qty integer NOT NULL,
-  unit_price double precision NOT NULL,
-  line_total double precision NOT NULL
+  unit_price integer NOT NULL,
+  line_total integer NOT NULL
 );
 CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items (order_id);
 CREATE INDEX IF NOT EXISTS order_items_product_idx ON order_items (product_id);
@@ -59,10 +59,10 @@ CREATE INDEX IF NOT EXISTS order_items_product_idx ON order_items (product_id);
 CREATE TABLE IF NOT EXISTS store_day_metrics (
   store_id integer NOT NULL REFERENCES stores(id),
   day date NOT NULL,
-  net_sales double precision NOT NULL,
+  net_sales integer NOT NULL,
   units integer NOT NULL,
   order_count integer NOT NULL,
-  avg_price double precision NOT NULL
+  avg_price integer NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS store_day_metrics_pk ON store_day_metrics (store_id, day);
 CREATE INDEX IF NOT EXISTS store_day_metrics_day_idx ON store_day_metrics (day);

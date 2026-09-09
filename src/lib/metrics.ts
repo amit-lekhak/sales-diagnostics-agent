@@ -7,7 +7,7 @@ export const METRIC_DEFS = {
     name: 'net_sales',
     label: 'Net sales',
     description:
-      'SUM(store_day_metrics.net_sales) for paid retail orders, rolled up daily.',
+      'SUM(store_day_metrics.net_sales) in integer paise for paid retail orders, rolled up daily.',
   },
   units: {
     name: 'units',
@@ -17,7 +17,8 @@ export const METRIC_DEFS = {
   aov: {
     name: 'aov',
     label: 'Average order value',
-    description: 'SUM(net_sales) / NULLIF(SUM(order_count), 0).',
+    description:
+      'SUM(net_sales) / NULLIF(SUM(order_count), 0), rounded to integer paise.',
   },
 } as const;
 
@@ -39,10 +40,10 @@ export async function getMetric(name: MetricName, filters: MetricFilters) {
 
   const expr =
     name === 'net_sales'
-      ? sql`COALESCE(SUM(m.net_sales), 0)`
+      ? sql`COALESCE(SUM(m.net_sales), 0)::bigint`
       : name === 'units'
-        ? sql`COALESCE(SUM(m.units), 0)::float8`
-        : sql`COALESCE(SUM(m.net_sales) / NULLIF(SUM(m.order_count), 0), 0)`;
+        ? sql`COALESCE(SUM(m.units), 0)::bigint`
+        : sql`COALESCE(ROUND(SUM(m.net_sales)::numeric / NULLIF(SUM(m.order_count), 0)), 0)::bigint`;
 
   const row = await sql<{ value: number | null }[]>`
     SELECT ${expr} AS value
@@ -54,14 +55,20 @@ export async function getMetric(name: MetricName, filters: MetricFilters) {
       ${regionFilter}
   `;
 
-  const value = Number(row[0]?.value ?? 0);
+  const value = Math.round(Number(row[0]?.value ?? 0));
   return {
     metric: name,
     ...METRIC_DEFS[name],
     value,
+    unit: name === 'units' ? 'count' : 'paise',
     display: name === 'units' ? num(value) : money(value),
     filters,
   };
+}
+
+function asInt(n: number | string | bigint | null | undefined): number {
+  if (typeof n === 'bigint') return Number(n);
+  return Math.round(Number(n ?? 0));
 }
 
 export async function seriesByDay(filters: MetricFilters) {
@@ -72,9 +79,11 @@ export async function seriesByDay(filters: MetricFilters) {
   const regionFilter =
     filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
 
-  return sql<{ day: string; net_sales: number; units: number; order_count: number }[]>`
+  const rows = await sql<
+    { day: string; net_sales: number; units: number; order_count: number }[]
+  >`
     SELECT m.day::text AS day,
-           SUM(m.net_sales)::float8 AS net_sales,
+           SUM(m.net_sales)::bigint AS net_sales,
            SUM(m.units)::int AS units,
            SUM(m.order_count)::int AS order_count
     FROM store_day_metrics m
@@ -86,6 +95,12 @@ export async function seriesByDay(filters: MetricFilters) {
     GROUP BY m.day
     ORDER BY m.day
   `;
+  return rows.map((r) => ({
+    ...r,
+    net_sales: asInt(r.net_sales),
+    units: asInt(r.units),
+    order_count: asInt(r.order_count),
+  }));
 }
 
 export async function breakdown(
@@ -102,9 +117,11 @@ export async function breakdown(
       filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
     const productFilter =
       filters.productId != null ? sql`AND oi.product_id = ${filters.productId}` : sql``;
-    return sql<{ key: string; label: string; net_sales: number; units: number }[]>`
+    const rows = await sql<
+      { key: string; label: string; net_sales: number; units: number }[]
+    >`
       SELECT p.id::text AS key, p.name AS label,
-             SUM(oi.line_total)::float8 AS net_sales,
+             SUM(oi.line_total)::bigint AS net_sales,
              SUM(oi.qty)::int AS units
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
@@ -120,6 +137,7 @@ export async function breakdown(
       ORDER BY net_sales DESC
       LIMIT ${limit}
     `;
+    return intMoneyRows(rows);
   }
 
   if (dimension === 'store') {
@@ -127,9 +145,11 @@ export async function breakdown(
       filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
     const regionFilter =
       filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
-    return sql<{ key: string; label: string; net_sales: number; units: number }[]>`
+    const rows = await sql<
+      { key: string; label: string; net_sales: number; units: number }[]
+    >`
       SELECT s.id::text AS key, s.name AS label,
-             SUM(m.net_sales)::float8 AS net_sales,
+             SUM(m.net_sales)::bigint AS net_sales,
              SUM(m.units)::int AS units
       FROM store_day_metrics m
       JOIN stores s ON s.id = m.store_id
@@ -141,15 +161,18 @@ export async function breakdown(
       ORDER BY net_sales DESC
       LIMIT ${limit}
     `;
+    return intMoneyRows(rows);
   }
 
   const storeFilter =
     filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
   const regionFilter =
     filters.regionId != null ? sql`AND r.id = ${filters.regionId}` : sql``;
-  return sql<{ key: string; label: string; net_sales: number; units: number }[]>`
+  const rows = await sql<
+    { key: string; label: string; net_sales: number; units: number }[]
+  >`
     SELECT r.id::text AS key, r.name AS label,
-           SUM(m.net_sales)::float8 AS net_sales,
+           SUM(m.net_sales)::bigint AS net_sales,
            SUM(m.units)::int AS units
     FROM store_day_metrics m
     JOIN stores s ON s.id = m.store_id
@@ -162,6 +185,17 @@ export async function breakdown(
     ORDER BY net_sales DESC
     LIMIT ${limit}
   `;
+  return intMoneyRows(rows);
+}
+
+function intMoneyRows(
+  rows: { key: string; label: string; net_sales: number; units: number }[],
+) {
+  return rows.map((r) => ({
+    ...r,
+    net_sales: asInt(r.net_sales),
+    units: asInt(r.units),
+  }));
 }
 
 export async function kpiBundle(filters: MetricFilters) {
