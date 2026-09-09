@@ -1,3 +1,10 @@
+# Agent notes
+
+- Prettier is the only formatter. Do not enable format-on-save.
+- Do not run ESLint --fix as a save action.
+- Match existing style so a later `pnpm format` is a no-op.
+- Do not reflow unrelated files.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

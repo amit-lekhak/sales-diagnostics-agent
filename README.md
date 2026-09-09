@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Northstar Mart — sales diagnostics agent
 
-## Getting Started
+Learning app: a fake retailer dashboard plus a Gemini chat that answers **only from Postgres tools**. Weather and news are ingested, then queried. The model does not invent sales figures.
 
-First, run the development server:
+## Prerequisites
+
+- Node 20+ and pnpm
+- Local Postgres (no Docker). This repo was developed against Postgres 14.
+- `pgvector` extension (`CREATE EXTENSION vector;`)
+- Optional: Google AI Studio key, OpenWeather key, OpenRouter key
+
+### pgvector on Homebrew Postgres 14
+
+If `SELECT * FROM pg_available_extensions WHERE name = 'vector'` is empty, build pgvector against **the same** `pg_config` as the running server (not libpq 17):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone --depth 1 --branch v0.8.1 https://github.com/pgvector/pgvector.git /tmp/pgvector
+# If clang complains about a missing MacOSX14.sdk, wrap clang so it uses the current Xcode SDK.
+make PG_CONFIG=/opt/homebrew/opt/postgresql@14/bin/pg_config
+make install PG_CONFIG=/opt/homebrew/opt/postgresql@14/bin/pg_config
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+createdb northstar
+psql -d northstar -c "CREATE EXTENSION vector;"
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cd sales_diagnostics_agent
+cp .env.example .env.local
+# set DATABASE_URL and GEMINI_API_KEY
+pnpm install
+pnpm db:push
+pnpm db:seed
+pnpm weather:sync   # optional; needs OPENWEATHER_API_KEY
+pnpm dev
+```
 
-## Learn More
+Open http://localhost:3000
 
-To learn more about Next.js, take a look at the following resources:
+Vercel: deploy this folder as the Next.js root. Point `DATABASE_URL` at hosted Postgres **with pgvector** (Neon or Supabase). Do not use Docker.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Demo questions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Overview, default dates: **What were net sales last month?** — must match the Overview KPI for that window (ask with explicit August 2026 dates if the model is vague).
+2. On `/stores?regionId=1` with **This page**: **How did West stores do in July 2026?**
+3. **Why did sales drop in July 2026 in Mumbai?** — expect a store breakdown, rain overlap, ShieldGuard stockout, and an unexplained remainder. Not “rain caused it.”
 
-## Deploy on Vercel
+Schema SQL lives in `drizzle/0000_init.sql`. Day-to-day local setup still uses `pnpm db:push`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `pnpm db:seed` / `pnpm db:reset` — wipe and reload planted stories
+- `pnpm weather:sync` — OpenWeather current + 5-day forecast upserted into `weather_daily`
+- `pnpm lint` / `pnpm format` — ESLint check; Prettier rewrite (not on save)
+
+## Format vs agent edits
+
+Workspace `.vscode/settings.json` turns **format on save** and **ESLint fix on save** off so Cmd+S does not rewrite agent edits. Format only with `pnpm format` or Format Document.
+
+## Planted stories in seed data
+
+- Mumbai July 2026: heavy rain + ShieldGuard stockout at Andheri
+- Delhi late Oct 2025: Diwali spike
+- Pune: Summer Refresh promo ends 15 Jun 2026 (drop is not weather)
