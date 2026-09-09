@@ -1,18 +1,13 @@
 import { google } from '@ai-sdk/google';
-import { stepCountIs, streamText, tool } from 'ai';
-import { z } from 'zod';
+import { stepCountIs, streamText } from 'ai';
 import { sql } from '@/lib/db';
 import { defaultRange } from '@/lib/dates';
+import { formatDimensionsPrompt, loadDimensions } from '@/lib/dimensions';
 import type { ChatScope, PageContext } from '@/lib/page-context';
+import { buildAiTools } from '@/lib/agent/ai-tools';
 import { systemPrompt } from '@/lib/agent/prompts';
 import { loadConversationContext, maybeSummarize } from '@/lib/agent/summarize';
-import {
-  explainChange,
-  listContextEvents,
-  metricTools,
-  searchNews,
-  type ToolRuntime,
-} from '@/lib/agent/tools';
+import type { ToolRuntime } from '@/lib/agent/tools';
 import {
   addSpan,
   captureSentry,
@@ -20,7 +15,6 @@ import {
   exportLangfuse,
   finishRun,
 } from '@/lib/agent/tracer';
-import type { MetricName } from '@/lib/metrics';
 
 function jsonb(value: unknown) {
   return sql`${JSON.stringify(value)}::jsonb`;
@@ -74,7 +68,6 @@ export async function POST(req: Request) {
   const runId = await createRun({ conversationId: convId, model: MODEL, scope });
   const started = Date.now();
   const rt: ToolRuntime = { runId, scope, filters };
-  const mt = metricTools(rt);
 
   if (!process.env.GEMINI_API_KEY) {
     await addSpan({
@@ -101,6 +94,7 @@ export async function POST(req: Request) {
   }
 
   const history = await loadConversationContext(convId);
+  const dimensions = formatDimensionsPrompt(await loadDimensions());
   const messages = [
     ...(history.summary
       ? [
@@ -116,94 +110,13 @@ export async function POST(req: Request) {
     })),
   ];
 
-  const metricEnum = z.enum(['net_sales', 'units', 'aov']);
-  const periodEnum = z.enum(['page', 'last_month', 'last_quarter']).optional();
-
   try {
     const result = streamText({
       model: google(MODEL),
-      system: systemPrompt(scope, page, range),
+      system: systemPrompt(scope, page, range, dimensions),
       messages,
       stopWhen: stepCountIs(8),
-      tools: {
-        get_metric: tool({
-          description:
-            'Return a named metric for a date range. Uses the semantic layer, never raw SQL from the model. Pass period last_month or last_quarter instead of guessing dates.',
-          inputSchema: z.object({
-            metric: metricEnum,
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-            storeId: z.number().optional(),
-            regionId: z.number().optional(),
-          }),
-          execute: async (args) =>
-            mt.get_metric({ ...args, metric: args.metric as MetricName }),
-        }),
-        breakdown: tool({
-          description: 'Break a period of net sales into region, store, or SKU slices.',
-          inputSchema: z.object({
-            dimension: z.enum(['region', 'store', 'sku']),
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-            storeId: z.number().optional(),
-            regionId: z.number().optional(),
-            limit: z.number().optional(),
-          }),
-          execute: async (args) => mt.breakdown(args),
-        }),
-        compare_periods: tool({
-          description:
-            'Compare a metric to the prior window of equal length, or year-over-year.',
-          inputSchema: z.object({
-            metric: metricEnum,
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-            mode: z.enum(['prior', 'yoy']).optional(),
-            storeId: z.number().optional(),
-            regionId: z.number().optional(),
-          }),
-          execute: async (args) =>
-            mt.compare_periods({ ...args, metric: args.metric as MetricName }),
-        }),
-        explain_change: tool({
-          description:
-            'Decompose a net-sales change vs the prior period by store/region/SKU. Includes unexplained remainder.',
-          inputSchema: z.object({
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-            dimension: z.enum(['region', 'store', 'sku']).optional(),
-            storeId: z.number().optional(),
-            regionId: z.number().optional(),
-          }),
-          execute: async (args) => explainChange(rt, args),
-        }),
-        list_context_events: tool({
-          description:
-            'Holidays, stored weather, and company events overlapping a date window. Correlation, not causation.',
-          inputSchema: z.object({
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-            storeId: z.number().optional(),
-            regionId: z.number().optional(),
-          }),
-          execute: async (args) => listContextEvents(rt, args),
-        }),
-        search_news: tool({
-          description: 'Semantic search over ingested news chunks in pgvector.',
-          inputSchema: z.object({
-            query: z.string(),
-            period: periodEnum,
-            from: z.string().optional(),
-            to: z.string().optional(),
-          }),
-          execute: async (args) => searchNews(rt, args),
-        }),
-      },
+      tools: buildAiTools(rt),
     });
 
     async function persistOk(

@@ -28,15 +28,26 @@ export type MetricFilters = DateRange & {
   storeId?: number;
   regionId?: number;
   productId?: number;
+  city?: string;
 };
 
+function needsStoreJoin(filters: MetricFilters) {
+  return filters.regionId != null || Boolean(filters.city);
+}
+
+function cityClause(filters: MetricFilters) {
+  return filters.city ? sql`AND s.city ILIKE ${filters.city}` : sql``;
+}
+
 export async function getMetric(name: MetricName, filters: MetricFilters) {
-  const storeJoin =
-    filters.regionId != null ? sql`JOIN stores s ON s.id = m.store_id` : sql``;
+  const storeJoin = needsStoreJoin(filters)
+    ? sql`JOIN stores s ON s.id = m.store_id`
+    : sql``;
   const storeFilter =
     filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
   const regionFilter =
     filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+  const cityFilter = cityClause(filters);
 
   const expr =
     name === 'net_sales'
@@ -53,6 +64,7 @@ export async function getMetric(name: MetricName, filters: MetricFilters) {
       AND m.day <= ${filters.to}::date
       ${storeFilter}
       ${regionFilter}
+      ${cityFilter}
   `;
 
   const value = Math.round(Number(row[0]?.value ?? 0));
@@ -72,12 +84,14 @@ function asInt(n: number | string | bigint | null | undefined): number {
 }
 
 export async function seriesByDay(filters: MetricFilters) {
-  const storeJoin =
-    filters.regionId != null ? sql`JOIN stores s ON s.id = m.store_id` : sql``;
+  const storeJoin = needsStoreJoin(filters)
+    ? sql`JOIN stores s ON s.id = m.store_id`
+    : sql``;
   const storeFilter =
     filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
   const regionFilter =
     filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+  const cityFilter = cityClause(filters);
 
   const rows = await sql<
     { day: string; net_sales: number; units: number; order_count: number }[]
@@ -92,6 +106,7 @@ export async function seriesByDay(filters: MetricFilters) {
       AND m.day <= ${filters.to}::date
       ${storeFilter}
       ${regionFilter}
+      ${cityFilter}
     GROUP BY m.day
     ORDER BY m.day
   `;
@@ -111,10 +126,12 @@ export async function breakdown(
   if (dimension === 'sku') {
     const storeFilter =
       filters.storeId != null ? sql`AND o.store_id = ${filters.storeId}` : sql``;
-    const regionJoin =
-      filters.regionId != null ? sql`JOIN stores s ON s.id = o.store_id` : sql``;
+    const regionJoin = needsStoreJoin(filters)
+      ? sql`JOIN stores s ON s.id = o.store_id`
+      : sql``;
     const regionFilter =
       filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+    const cityFilter = cityClause(filters);
     const productFilter =
       filters.productId != null ? sql`AND oi.product_id = ${filters.productId}` : sql``;
     const rows = await sql<
@@ -132,6 +149,7 @@ export async function breakdown(
         AND o.paid_at::date <= ${filters.to}::date
         ${storeFilter}
         ${regionFilter}
+        ${cityFilter}
         ${productFilter}
       GROUP BY p.id, p.name
       ORDER BY net_sales DESC
@@ -145,6 +163,7 @@ export async function breakdown(
       filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
     const regionFilter =
       filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+    const cityFilter = cityClause(filters);
     const rows = await sql<
       { key: string; label: string; net_sales: number; units: number }[]
     >`
@@ -157,6 +176,7 @@ export async function breakdown(
         AND m.day <= ${filters.to}::date
         ${storeFilter}
         ${regionFilter}
+        ${cityFilter}
       GROUP BY s.id, s.name
       ORDER BY net_sales DESC
       LIMIT ${limit}
@@ -168,6 +188,7 @@ export async function breakdown(
     filters.storeId != null ? sql`AND m.store_id = ${filters.storeId}` : sql``;
   const regionFilter =
     filters.regionId != null ? sql`AND r.id = ${filters.regionId}` : sql``;
+  const cityFilter = cityClause(filters);
   const rows = await sql<
     { key: string; label: string; net_sales: number; units: number }[]
   >`
@@ -181,6 +202,7 @@ export async function breakdown(
       AND m.day <= ${filters.to}::date
       ${storeFilter}
       ${regionFilter}
+      ${cityFilter}
     GROUP BY r.id, r.name
     ORDER BY net_sales DESC
     LIMIT ${limit}

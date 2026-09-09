@@ -12,7 +12,8 @@
     "db:push": "tsx scripts/ensure-extensions.ts && drizzle-kit push --force",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/seed.ts",
-    "weather:sync": "tsx scripts/sync-weather.ts"
+    "weather:sync": "tsx scripts/sync-weather.ts",
+    "eval": "tsx evals/runner.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.64",

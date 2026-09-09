@@ -1,11 +1,14 @@
 import { sql } from '../db';
 import {
+  DATA_END,
+  DATA_START,
   priorPeriod,
   rangeForPeriod,
   yoyPeriod,
   type DateRange,
   type NamedPeriod,
 } from '../dates';
+import { resolvePlace } from '../dimensions';
 import { money } from '../format';
 import {
   breakdown,
@@ -22,30 +25,52 @@ export type ToolRuntime = {
   filters: MetricFilters;
 };
 
-export type FilterOverride = Partial<MetricFilters> & { period?: NamedPeriod };
+export type FilterOverride = Partial<MetricFilters> & {
+  period?: NamedPeriod;
+  storeName?: string;
+  regionName?: string;
+};
 
-function applyPage(rt: ToolRuntime, override?: FilterOverride): MetricFilters {
+async function applyPage(
+  rt: ToolRuntime,
+  override?: FilterOverride,
+): Promise<MetricFilters> {
   const named = rangeForPeriod(override?.period);
   const dates = named ?? {
     from: override?.from ?? rt.filters.from,
     to: override?.to ?? rt.filters.to,
   };
+  const place = await resolvePlace({
+    storeId: override?.storeId,
+    regionId: override?.regionId,
+    storeName: override?.storeName,
+    regionName: override?.regionName,
+  });
   if (rt.scope === 'all') {
     return {
       ...dates,
-      storeId: override?.storeId,
-      regionId: override?.regionId,
+      storeId: place.storeId,
+      regionId: place.regionId,
+      city: place.city ?? override?.city,
       productId: override?.productId,
     };
   }
   return {
     ...rt.filters,
     ...dates,
-    storeId: override?.storeId ?? rt.filters.storeId,
-    regionId: override?.regionId ?? rt.filters.regionId,
+    storeId: place.storeId ?? rt.filters.storeId,
+    regionId: place.regionId ?? rt.filters.regionId,
+    city: place.city ?? override?.city ?? rt.filters.city,
     productId: override?.productId ?? rt.filters.productId,
   };
 }
+
+export type LocationArgs = {
+  storeId?: number;
+  regionId?: number;
+  storeName?: string;
+  regionName?: string;
+};
 
 async function traced<T>(
   rt: ToolRuntime,
@@ -80,43 +105,43 @@ async function traced<T>(
 
 export function metricTools(rt: ToolRuntime) {
   return {
-    async get_metric(args: {
-      metric: MetricName;
-      period?: NamedPeriod;
-      from?: string;
-      to?: string;
-      storeId?: number;
-      regionId?: number;
-    }) {
-      const filters = applyPage(rt, args);
+    async get_metric(
+      args: {
+        metric: MetricName;
+        period?: NamedPeriod;
+        from?: string;
+        to?: string;
+      } & LocationArgs,
+    ) {
+      const filters = await applyPage(rt, args);
       return traced(rt, 'get_metric', args, () => getMetric(args.metric, filters));
     },
-    async breakdown(args: {
-      dimension: 'region' | 'store' | 'sku';
-      period?: NamedPeriod;
-      from?: string;
-      to?: string;
-      storeId?: number;
-      regionId?: number;
-      limit?: number;
-    }) {
-      const filters = applyPage(rt, args);
+    async breakdown(
+      args: {
+        dimension: 'region' | 'store' | 'sku';
+        period?: NamedPeriod;
+        from?: string;
+        to?: string;
+        limit?: number;
+      } & LocationArgs,
+    ) {
+      const filters = await applyPage(rt, args);
       return traced(rt, 'breakdown', args, async () => ({
         dimension: args.dimension,
         rows: await breakdown(args.dimension, filters, args.limit ?? 8),
         filters,
       }));
     },
-    async compare_periods(args: {
-      metric: MetricName;
-      period?: NamedPeriod;
-      from?: string;
-      to?: string;
-      mode?: 'prior' | 'yoy';
-      storeId?: number;
-      regionId?: number;
-    }) {
-      const current = applyPage(rt, args);
+    async compare_periods(
+      args: {
+        metric: MetricName;
+        period?: NamedPeriod;
+        from?: string;
+        to?: string;
+        mode?: 'prior' | 'yoy';
+      } & LocationArgs,
+    ) {
+      const current = await applyPage(rt, args);
       const other: DateRange =
         args.mode === 'yoy' ? yoyPeriod(current) : priorPeriod(current);
       return traced(rt, 'compare_periods', args, async () => {
@@ -151,11 +176,9 @@ export async function explainChange(
     from?: string;
     to?: string;
     dimension?: 'region' | 'store' | 'sku';
-    storeId?: number;
-    regionId?: number;
-  },
+  } & LocationArgs,
 ) {
-  const current = applyPage(rt, args);
+  const current = await applyPage(rt, args);
   const prior = priorPeriod(current);
   const dimension = args.dimension ?? 'store';
   return traced(rt, 'explain_change', args, async () => {
@@ -206,16 +229,18 @@ export async function listContextEvents(
     period?: NamedPeriod;
     from?: string;
     to?: string;
-    storeId?: number;
-    regionId?: number;
-  },
+  } & LocationArgs,
 ) {
-  const filters = applyPage(rt, args);
+  const filters = await applyPage(rt, args);
   return traced(rt, 'list_context_events', args, async () => {
     const storeFilter =
       filters.storeId != null
         ? sql`AND (e.store_id IS NULL OR e.store_id = ${filters.storeId})`
-        : sql``;
+        : filters.city
+          ? sql`AND (e.store_id IS NULL OR s.city ILIKE ${filters.city})`
+          : sql``;
+    const prior = priorPeriod(filters);
+    const eventWindowFrom = prior.from < filters.from ? prior.from : filters.from;
     const events = await sql<
       {
         type: string;
@@ -228,7 +253,7 @@ export async function listContextEvents(
       SELECT e.type, e.starts_on::text, e.ends_on::text, e.notes, s.name AS store
       FROM company_events e
       LEFT JOIN stores s ON s.id = e.store_id
-      WHERE e.starts_on <= ${filters.to}::date AND e.ends_on >= ${filters.from}::date
+      WHERE e.starts_on <= ${filters.to}::date AND e.ends_on >= ${eventWindowFrom}::date
       ${storeFilter}
       ORDER BY e.starts_on
     `;
@@ -243,7 +268,9 @@ export async function listContextEvents(
         ? sql`AND w.store_id = ${filters.storeId}`
         : filters.regionId != null
           ? sql`AND s.region_id = ${filters.regionId}`
-          : sql``;
+          : filters.city
+            ? sql`AND s.city ILIKE ${filters.city}`
+            : sql``;
     const weather = await sql<
       { store: string; rain_mm: number; temp_c: number; wet_days: number }[]
     >`
@@ -264,7 +291,7 @@ export async function listContextEvents(
       company_events: events,
       weather_by_store: weather,
       interpretation:
-        'Overlap is a correlation. Do not claim weather or news caused a sales move unless a company_event also matches.',
+        'Overlap is a correlation. Do not claim weather or news caused a sales move unless a company_event also matches. Events that ended just before this window (for example a promo) are included because they can explain a drop after the end date.',
     };
   });
 }
@@ -273,7 +300,10 @@ export async function searchNews(
   rt: ToolRuntime,
   args: { query: string; period?: NamedPeriod; from?: string; to?: string },
 ) {
-  const filters = applyPage(rt, args);
+  const hasWindow = Boolean(args.period || args.from || args.to);
+  const filters = hasWindow
+    ? await applyPage(rt, args)
+    : { from: DATA_START, to: DATA_END };
   return traced(rt, 'search_news', args, async () => {
     const { embedTexts, toVectorLiteral } = await import('../embeddings');
     const started = new Date();
