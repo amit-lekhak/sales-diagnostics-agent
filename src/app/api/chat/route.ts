@@ -64,13 +64,14 @@ export async function POST(req: Request) {
     `;
     conversationId = c!.id;
   }
+  const convId = conversationId;
 
   await sql`
     INSERT INTO messages (conversation_id, role, content, scope, page_context)
-    VALUES (${conversationId}::uuid, 'user', ${body.message}, ${scope}, ${jsonb(page)})
+    VALUES (${convId}::uuid, 'user', ${body.message}, ${scope}, ${jsonb(page)})
   `;
 
-  const runId = await createRun({ conversationId, model: MODEL, scope });
+  const runId = await createRun({ conversationId: convId, model: MODEL, scope });
   const started = Date.now();
   const rt: ToolRuntime = { runId, scope, filters };
   const mt = metricTools(rt);
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
       'GEMINI_API_KEY is missing. Set it in .env.local to answer with live model calls. Dashboard numbers still come from Postgres.';
     const [msg] = await sql<{ id: string }[]>`
       INSERT INTO messages (conversation_id, role, content, scope, page_context, run_id)
-      VALUES (${conversationId}::uuid, 'assistant', ${text}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
+      VALUES (${convId}::uuid, 'assistant', ${text}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
       RETURNING id::text AS id
     `;
     await finishRun(runId, {
@@ -96,10 +97,10 @@ export async function POST(req: Request) {
       error: 'GEMINI_API_KEY missing',
       messageId: msg!.id,
     });
-    return Response.json({ conversationId, runId, text, error: 'missing_key' });
+    return Response.json({ conversationId: convId, runId, text, error: 'missing_key' });
   }
 
-  const history = await loadConversationContext(conversationId);
+  const history = await loadConversationContext(convId);
   const messages = [
     ...(history.summary
       ? [
@@ -116,6 +117,7 @@ export async function POST(req: Request) {
   ];
 
   const metricEnum = z.enum(['net_sales', 'units', 'aov']);
+  const periodEnum = z.enum(['page', 'last_month', 'last_quarter']).optional();
 
   try {
     const result = streamText({
@@ -126,9 +128,10 @@ export async function POST(req: Request) {
       tools: {
         get_metric: tool({
           description:
-            'Return a named metric for a date range. Uses the semantic layer, never raw SQL from the model.',
+            'Return a named metric for a date range. Uses the semantic layer, never raw SQL from the model. Pass period last_month or last_quarter instead of guessing dates.',
           inputSchema: z.object({
             metric: metricEnum,
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
             storeId: z.number().optional(),
@@ -141,6 +144,7 @@ export async function POST(req: Request) {
           description: 'Break a period of net sales into region, store, or SKU slices.',
           inputSchema: z.object({
             dimension: z.enum(['region', 'store', 'sku']),
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
             storeId: z.number().optional(),
@@ -154,6 +158,7 @@ export async function POST(req: Request) {
             'Compare a metric to the prior window of equal length, or year-over-year.',
           inputSchema: z.object({
             metric: metricEnum,
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
             mode: z.enum(['prior', 'yoy']).optional(),
@@ -167,6 +172,7 @@ export async function POST(req: Request) {
           description:
             'Decompose a net-sales change vs the prior period by store/region/SKU. Includes unexplained remainder.',
           inputSchema: z.object({
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
             dimension: z.enum(['region', 'store', 'sku']).optional(),
@@ -179,6 +185,7 @@ export async function POST(req: Request) {
           description:
             'Holidays, stored weather, and company events overlapping a date window. Correlation, not causation.',
           inputSchema: z.object({
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
             storeId: z.number().optional(),
@@ -190,57 +197,63 @@ export async function POST(req: Request) {
           description: 'Semantic search over ingested news chunks in pgvector.',
           inputSchema: z.object({
             query: z.string(),
+            period: periodEnum,
             from: z.string().optional(),
             to: z.string().optional(),
           }),
           execute: async (args) => searchNews(rt, args),
         }),
       },
-      onFinish: async ({ text, usage, finishReason }) => {
-        const llmEnded = new Date();
-        await addSpan({
-          runId,
-          kind: 'llm',
-          name: MODEL,
-          startedAt: new Date(started),
-          endedAt: llmEnded,
-          payloadOut: { finishReason, chars: text.length },
-          tokenCount: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
-        });
-        const [msg] = await sql<{ id: string }[]>`
-          INSERT INTO messages (conversation_id, role, content, scope, page_context, run_id)
-          VALUES (${conversationId}::uuid, 'assistant', ${text}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
-          RETURNING id::text AS id
-        `;
-        await finishRun(runId, {
-          status: 'ok',
-          latencyMs: Date.now() - started,
-          inputTokens: usage?.inputTokens ?? null,
-          outputTokens: usage?.outputTokens ?? null,
-          messageId: msg!.id,
-        });
-        await sql`
-          UPDATE conversations SET updated_at = NOW(), last_page_context = ${jsonb(page)}
-          WHERE id = ${conversationId}::uuid
-        `;
-        await maybeSummarize(conversationId!, runId);
-        await exportLangfuse({
-          id: runId,
-          model: MODEL,
-          status: 'ok',
-          latencyMs: Date.now() - started,
-        });
-      },
     });
+
+    async function persistOk(
+      text: string,
+      usage: { inputTokens?: number; outputTokens?: number } | undefined,
+    ) {
+      const bodyText = text ?? '';
+      await addSpan({
+        runId,
+        kind: 'llm',
+        name: MODEL,
+        startedAt: new Date(started),
+        endedAt: new Date(),
+        payloadOut: { chars: bodyText.length },
+        tokenCount: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+      });
+      const [msg] = await sql<{ id: string }[]>`
+        INSERT INTO messages (conversation_id, role, content, scope, page_context, run_id)
+        VALUES (${convId}::uuid, 'assistant', ${bodyText}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
+        RETURNING id::text AS id
+      `;
+      await finishRun(runId, {
+        status: 'ok',
+        latencyMs: Date.now() - started,
+        inputTokens: usage?.inputTokens ?? null,
+        outputTokens: usage?.outputTokens ?? null,
+        messageId: msg!.id,
+      });
+      await sql`
+        UPDATE conversations SET updated_at = NOW(), last_page_context = ${jsonb(page)}
+        WHERE id = ${convId}::uuid
+      `;
+      await maybeSummarize(convId, runId);
+      await exportLangfuse({
+        id: runId,
+        model: MODEL,
+        status: 'ok',
+        latencyMs: Date.now() - started,
+      });
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: 'meta', conversationId, runId })}\n\n`,
+            `data: ${JSON.stringify({ type: 'meta', conversationId: convId, runId })}\n\n`,
           ),
         );
+        let persisted = false;
         try {
           for await (const delta of result.textStream) {
             controller.enqueue(
@@ -249,18 +262,35 @@ export async function POST(req: Request) {
               ),
             );
           }
+          const text = (await result.text) ?? '';
+          const usage = await result.usage;
+          try {
+            await persistOk(text, usage);
+            persisted = true;
+          } catch (persistErr) {
+            const message =
+              persistErr instanceof Error ? persistErr.message : String(persistErr);
+            await finishRun(runId, {
+              status: 'error',
+              latencyMs: Date.now() - started,
+              error: message,
+            });
+            await captureSentry(message);
+          }
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: 'done', conversationId, runId })}\n\n`,
+              `data: ${JSON.stringify({ type: 'done', conversationId: convId, runId })}\n\n`,
             ),
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          await finishRun(runId, {
-            status: 'error',
-            latencyMs: Date.now() - started,
-            error: message,
-          });
+          if (!persisted) {
+            await finishRun(runId, {
+              status: 'error',
+              latencyMs: Date.now() - started,
+              error: message,
+            });
+          }
           await captureSentry(message);
           controller.enqueue(
             encoder.encode(
@@ -287,6 +317,9 @@ export async function POST(req: Request) {
       error: message,
     });
     await captureSentry(message);
-    return Response.json({ error: message, conversationId, runId }, { status: 500 });
+    return Response.json(
+      { error: message, conversationId: convId, runId },
+      { status: 500 },
+    );
   }
 }

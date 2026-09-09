@@ -31,7 +31,12 @@ export function SalesChart({ data }: { data: { day: string; net_sales: number }[
             tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
           />
           <Tooltip formatter={(v) => money(Number(v))} />
-          <Bar dataKey="net_sales" fill="#0f766e" radius={[3, 3, 0, 0]} />
+          <Bar
+            dataKey="net_sales"
+            fill="#0f766e"
+            name="Net sales"
+            radius={[3, 3, 0, 0]}
+          />
         </BarChart>
       </ResponsiveContainer>
     </ChartFrame>

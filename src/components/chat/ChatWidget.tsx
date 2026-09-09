@@ -26,6 +26,22 @@ type Span = {
   output: unknown;
 };
 
+function TypingDots() {
+  return (
+    <span className="inline-flex" aria-label="Loading">
+      <span className="animate-bounce" style={{ animationDelay: '0ms' }}>
+        .
+      </span>
+      <span className="animate-bounce" style={{ animationDelay: '150ms' }}>
+        .
+      </span>
+      <span className="animate-bounce" style={{ animationDelay: '300ms' }}>
+        .
+      </span>
+    </span>
+  );
+}
+
 export function ChatWidget() {
   const page = usePageContext();
   const [open, setOpen] = useState(false);
@@ -42,16 +58,26 @@ export function ChatWidget() {
 
   const chip = useMemo(() => describePageContext(page, scope), [page, scope]);
   const citations = useMemo(() => citationsFromSpans(spans), [spans]);
+  const visibleThreads = threads.slice(0, 3);
 
   const loadThreads = useCallback(async () => {
     const res = await fetch('/api/conversations');
     const json = (await res.json()) as { conversations: { id: string; title: string }[] };
     setThreads(json.conversations ?? []);
+    return json.conversations ?? [];
   }, []);
 
   useEffect(() => {
     void loadThreads();
   }, [loadThreads]);
+
+  function resetComposer() {
+    setConversationId(null);
+    setMessages([]);
+    setRunId(null);
+    setSpans([]);
+    setSummaryNote(null);
+  }
 
   async function loadConversation(id: string) {
     setConversationId(id);
@@ -73,15 +99,18 @@ export function ChatWidget() {
     setRunId(lastRun ?? null);
   }
 
-  async function newChat() {
-    const res = await fetch('/api/conversations', { method: 'POST' });
-    const json = (await res.json()) as { id: string };
-    setConversationId(json.id);
-    setMessages([]);
-    setRunId(null);
-    setSpans([]);
-    setSummaryNote(null);
-    await loadThreads();
+  function newChat() {
+    resetComposer();
+  }
+
+  async function closeThread(id: string) {
+    await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+    const remaining = await loadThreads();
+    if (conversationId === id) {
+      const next = remaining[0];
+      if (next) await loadConversation(next.id);
+      else resetComposer();
+    }
   }
 
   async function send() {
@@ -252,25 +281,40 @@ export function ChatWidget() {
         <button
           type="button"
           className="ml-auto rounded px-2 py-1 bg-stone-100"
-          onClick={() => void newChat()}
+          onClick={newChat}
         >
           New chat
         </button>
       </div>
-      {threads.length > 0 && (
+      {visibleThreads.length > 0 && (
         <div className="flex gap-1 overflow-x-auto border-b border-(--line) px-2 py-1 text-[11px]">
-          {threads.slice(0, 8).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => void loadConversation(t.id)}
-              className={clsx(
-                'shrink-0 rounded px-2 py-1',
-                t.id === conversationId ? 'bg-stone-800 text-white' : 'bg-stone-100',
-              )}
-            >
-              {t.title.slice(0, 22)}
-            </button>
+          {visibleThreads.map((t) => (
+            <div key={t.id} className="group relative shrink-0">
+              <button
+                type="button"
+                onClick={() => void loadConversation(t.id)}
+                className={clsx(
+                  'rounded px-2 py-1 pr-5',
+                  t.id === conversationId ? 'bg-stone-800 text-white' : 'bg-stone-100',
+                )}
+              >
+                {t.title.slice(0, 22)}
+              </button>
+              <button
+                type="button"
+                aria-label="Close chat"
+                className={clsx(
+                  'absolute right-0.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-xs leading-none group-hover:flex hover:bg-black/20',
+                  t.id === conversationId ? 'text-white' : 'text-stone-600',
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void closeThread(t.id);
+                }}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -305,7 +349,7 @@ export function ChatWidget() {
               m.role === 'user' ? 'ml-6 bg-stone-200' : 'mr-4 bg-teal-50',
             )}
           >
-            {m.content || (busy && i === messages.length - 1 ? '…' : '')}
+            {m.content || (busy && i === messages.length - 1 ? <TypingDots /> : '')}
           </div>
         ))}
       </div>
@@ -317,11 +361,6 @@ export function ChatWidget() {
         >
           {showTrace ? 'Hide trace' : 'Trace / sources'}
         </button>
-        {runId && (
-          <a className="underline" href={`/ops/${runId}`}>
-            Open run
-          </a>
-        )}
       </div>
       {showTrace && (
         <div className="max-h-36 overflow-auto border-t border-(--line) bg-stone-50 px-3 py-2 text-[11px]">

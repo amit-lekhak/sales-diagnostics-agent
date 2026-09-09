@@ -41,7 +41,12 @@ export function BreakdownChart({
           />
           <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11 }} />
           <Tooltip formatter={(v) => money(Number(v))} />
-          <Bar dataKey="net_sales" fill="#0f766e" radius={[0, 3, 3, 0]} />
+          <Bar
+            dataKey="net_sales"
+            fill="#0f766e"
+            name="Net sales"
+            radius={[0, 3, 3, 0]}
+          />
         </BarChart>
       </ResponsiveContainer>
     </ChartFrame>

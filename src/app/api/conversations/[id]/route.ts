@@ -22,3 +22,19 @@ export async function GET(
   `;
   return Response.json({ messages, summary: conv?.summary ?? null });
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return Response.json({ error: 'invalid id' }, { status: 400 });
+  }
+  await sql`
+    UPDATE agent_runs SET conversation_id = NULL WHERE conversation_id = ${id}::uuid
+  `;
+  await sql`DELETE FROM messages WHERE conversation_id = ${id}::uuid`;
+  await sql`DELETE FROM conversations WHERE id = ${id}::uuid`;
+  return Response.json({ ok: true });
+}

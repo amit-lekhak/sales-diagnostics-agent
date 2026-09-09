@@ -7,7 +7,7 @@ export async function GET() {
     SELECT id::text, title, updated_at::text
     FROM conversations
     ORDER BY updated_at DESC
-    LIMIT 30
+    LIMIT 3
   `;
   return Response.json({ conversations: rows });
 }

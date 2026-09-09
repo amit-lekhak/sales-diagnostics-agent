@@ -1,6 +1,19 @@
 import { sql } from '../db';
-import { priorPeriod, yoyPeriod, type DateRange } from '../dates';
-import { breakdown, getMetric, type MetricFilters, type MetricName } from '../metrics';
+import {
+  priorPeriod,
+  rangeForPeriod,
+  yoyPeriod,
+  type DateRange,
+  type NamedPeriod,
+} from '../dates';
+import { money } from '../format';
+import {
+  breakdown,
+  getMetric,
+  METRIC_DEFS,
+  type MetricFilters,
+  type MetricName,
+} from '../metrics';
 import { addSpan } from './tracer';
 
 export type ToolRuntime = {
@@ -9,17 +22,29 @@ export type ToolRuntime = {
   filters: MetricFilters;
 };
 
-function applyPage(rt: ToolRuntime, override?: Partial<MetricFilters>): MetricFilters {
+export type FilterOverride = Partial<MetricFilters> & { period?: NamedPeriod };
+
+function applyPage(rt: ToolRuntime, override?: FilterOverride): MetricFilters {
+  const named = rangeForPeriod(override?.period);
+  const dates = named ?? {
+    from: override?.from ?? rt.filters.from,
+    to: override?.to ?? rt.filters.to,
+  };
   if (rt.scope === 'all') {
     return {
-      from: override?.from ?? rt.filters.from,
-      to: override?.to ?? rt.filters.to,
+      ...dates,
       storeId: override?.storeId,
       regionId: override?.regionId,
       productId: override?.productId,
     };
   }
-  return { ...rt.filters, ...override };
+  return {
+    ...rt.filters,
+    ...dates,
+    storeId: override?.storeId ?? rt.filters.storeId,
+    regionId: override?.regionId ?? rt.filters.regionId,
+    productId: override?.productId ?? rt.filters.productId,
+  };
 }
 
 async function traced<T>(
@@ -57,6 +82,7 @@ export function metricTools(rt: ToolRuntime) {
   return {
     async get_metric(args: {
       metric: MetricName;
+      period?: NamedPeriod;
       from?: string;
       to?: string;
       storeId?: number;
@@ -67,6 +93,7 @@ export function metricTools(rt: ToolRuntime) {
     },
     async breakdown(args: {
       dimension: 'region' | 'store' | 'sku';
+      period?: NamedPeriod;
       from?: string;
       to?: string;
       storeId?: number;
@@ -82,6 +109,7 @@ export function metricTools(rt: ToolRuntime) {
     },
     async compare_periods(args: {
       metric: MetricName;
+      period?: NamedPeriod;
       from?: string;
       to?: string;
       mode?: 'prior' | 'yoy';
@@ -96,11 +124,19 @@ export function metricTools(rt: ToolRuntime) {
         const b = await getMetric(args.metric, { ...current, ...other });
         const delta = a.value - b.value;
         const pct = b.value ? delta / b.value : null;
+        const def = METRIC_DEFS[args.metric];
         return {
           metric: args.metric,
-          current: { ...current, value: a.value },
-          baseline: { ...other, value: b.value, mode: args.mode ?? 'prior' },
+          label: def.label,
+          current: { ...current, value: a.value, display: a.display },
+          baseline: {
+            ...other,
+            value: b.value,
+            display: b.display,
+            mode: args.mode ?? 'prior',
+          },
           delta,
+          delta_display: money(delta),
           pct_change: pct,
         };
       });
@@ -111,6 +147,7 @@ export function metricTools(rt: ToolRuntime) {
 export async function explainChange(
   rt: ToolRuntime,
   args: {
+    period?: NamedPeriod;
     from?: string;
     to?: string;
     dimension?: 'region' | 'store' | 'sku';
@@ -145,11 +182,15 @@ export async function explainChange(
     const totalDelta = nowTotal.value - priorTotal.value;
     return {
       metric: 'net_sales',
+      label: METRIC_DEFS.net_sales.label,
       current_period: current,
       prior_period: prior,
       current_value: nowTotal.value,
+      current_display: nowTotal.display,
       prior_value: priorTotal.value,
+      prior_display: priorTotal.display,
       delta: totalDelta,
+      delta_display: money(totalDelta),
       dimension,
       top_contributors: contributions.slice(0, 8),
       explained_delta: explained,
@@ -161,7 +202,13 @@ export async function explainChange(
 
 export async function listContextEvents(
   rt: ToolRuntime,
-  args: { from?: string; to?: string; storeId?: number; regionId?: number },
+  args: {
+    period?: NamedPeriod;
+    from?: string;
+    to?: string;
+    storeId?: number;
+    regionId?: number;
+  },
 ) {
   const filters = applyPage(rt, args);
   return traced(rt, 'list_context_events', args, async () => {
@@ -224,7 +271,7 @@ export async function listContextEvents(
 
 export async function searchNews(
   rt: ToolRuntime,
-  args: { query: string; from?: string; to?: string },
+  args: { query: string; period?: NamedPeriod; from?: string; to?: string },
 ) {
   const filters = applyPage(rt, args);
   return traced(rt, 'search_news', args, async () => {

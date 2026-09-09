@@ -1,5 +1,6 @@
 import { sql } from './db';
 import type { DateRange } from './dates';
+import { money, num } from './format';
 
 export const METRIC_DEFS = {
   net_sales: {
@@ -53,10 +54,12 @@ export async function getMetric(name: MetricName, filters: MetricFilters) {
       ${regionFilter}
   `;
 
+  const value = Number(row[0]?.value ?? 0);
   return {
     metric: name,
     ...METRIC_DEFS[name],
-    value: Number(row[0]?.value ?? 0),
+    value,
+    display: name === 'units' ? num(value) : money(value),
     filters,
   };
 }

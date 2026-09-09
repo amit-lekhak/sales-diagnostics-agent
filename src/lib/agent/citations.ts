@@ -1,8 +1,16 @@
+import { money } from '../format';
+
 export type TraceSpan = {
   kind: string;
   name: string;
   error: string | null;
   output: unknown;
+};
+
+const METRIC_LABELS: Record<string, string> = {
+  net_sales: 'Net sales',
+  units: 'Units',
+  aov: 'Average order value',
 };
 
 export function citationsFromSpans(spans: TraceSpan[]): string[] {
@@ -20,16 +28,16 @@ export function citationsFromSpans(spans: TraceSpan[]): string[] {
       continue;
     }
     if (span.name === 'get_metric' && out.metric != null) {
-      lines.push(
-        `SQL metric ${String(out.metric)} = ${fmtNum(out.value)} (${fmtFilters(out.filters)})`,
-      );
+      const label = metricLabel(out);
+      const shown = typeof out.display === 'string' ? out.display : fmtMoney(out.value);
+      lines.push(`SQL ${label} = ${shown} (${fmtFilters(out.filters)})`);
     } else if (span.name === 'breakdown') {
       const rows = Array.isArray(out.rows) ? out.rows : [];
       const top = rows
         .slice(0, 3)
         .map((r) => {
           const rec = asRecord(r);
-          return rec ? `${String(rec.label)} ${fmtNum(rec.net_sales)}` : '';
+          return rec ? `${String(rec.label)} ${fmtMoney(rec.net_sales)}` : '';
         })
         .filter(Boolean)
         .join('; ');
@@ -37,12 +45,17 @@ export function citationsFromSpans(spans: TraceSpan[]): string[] {
         `SQL breakdown by ${String(out.dimension ?? 'slice')}: ${top || 'no rows'}`,
       );
     } else if (span.name === 'compare_periods') {
+      const label = metricLabel(out);
+      const shown =
+        typeof out.delta_display === 'string' ? out.delta_display : fmtMoney(out.delta);
       lines.push(
-        `SQL compare ${String(out.metric)} delta ${fmtNum(out.delta)} (${fmtFilters(asRecord(out.current))})`,
+        `SQL compare ${label} delta ${shown} (${fmtFilters(asRecord(out.current))})`,
       );
     } else if (span.name === 'explain_change') {
+      const shown =
+        typeof out.delta_display === 'string' ? out.delta_display : fmtMoney(out.delta);
       lines.push(
-        `SQL explain_change delta ${fmtNum(out.delta)}; unexplained remainder ${fmtNum(out.unexplained_remainder)}`,
+        `SQL explain_change delta ${shown}; unexplained remainder ${fmtMoney(out.unexplained_remainder)}`,
       );
     } else if (span.name === 'list_context_events') {
       const holidays = Array.isArray(out.holidays) ? out.holidays.length : 0;
@@ -75,10 +88,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function fmtNum(value: unknown): string {
+function metricLabel(out: Record<string, unknown>): string {
+  if (typeof out.label === 'string' && out.label) return out.label;
+  const key = String(out.metric ?? '');
+  return (METRIC_LABELS[key] ?? key) || 'metric';
+}
+
+function fmtMoney(value: unknown): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value ?? '—');
-  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
+  return money(n);
 }
 
 function fmtFilters(value: unknown): string {

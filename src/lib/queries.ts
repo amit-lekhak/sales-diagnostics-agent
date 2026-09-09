@@ -121,13 +121,34 @@ export async function paginatedStores(opts: {
   return { rows, total: countRow?.count ?? 0, page: opts.page, pageSize };
 }
 
-export async function contextTables(range: DateRange) {
+export async function contextTables(
+  range: DateRange,
+  pages: { holidays: number; events: number; weather: number; news: number },
+  pageSize = 25,
+) {
+  const holidayOffset = (pages.holidays - 1) * pageSize;
+  const eventOffset = (pages.events - 1) * pageSize;
+  const weatherOffset = (pages.weather - 1) * pageSize;
+  const newsOffset = (pages.news - 1) * pageSize;
+
+  const [holidayCount] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM holidays h
+    WHERE h.date BETWEEN ${range.from}::date AND ${range.to}::date
+  `;
   const holidays = await sql<{ date: string; name: string; region: string | null }[]>`
     SELECT h.date::text, h.name, r.name AS region
     FROM holidays h
     LEFT JOIN regions r ON r.id = h.region_id
     WHERE h.date BETWEEN ${range.from}::date AND ${range.to}::date
-    ORDER BY h.date
+    ORDER BY h.date DESC
+    LIMIT ${pageSize} OFFSET ${holidayOffset}
+  `;
+
+  const [weatherCount] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM weather_daily w
+    WHERE w.date BETWEEN ${range.from}::date AND ${range.to}::date
   `;
   const weather = await sql<
     {
@@ -144,7 +165,13 @@ export async function contextTables(range: DateRange) {
     JOIN stores s ON s.id = w.store_id
     WHERE w.date BETWEEN ${range.from}::date AND ${range.to}::date
     ORDER BY w.date DESC, s.name
-    LIMIT 80
+    LIMIT ${pageSize} OFFSET ${weatherOffset}
+  `;
+
+  const [eventCount] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM company_events e
+    WHERE e.starts_on <= ${range.to}::date AND e.ends_on >= ${range.from}::date
   `;
   const events = await sql<
     {
@@ -159,16 +186,51 @@ export async function contextTables(range: DateRange) {
     FROM company_events e
     LEFT JOIN stores s ON s.id = e.store_id
     WHERE e.starts_on <= ${range.to}::date AND e.ends_on >= ${range.from}::date
-    ORDER BY e.starts_on
+    ORDER BY e.starts_on DESC
+    LIMIT ${pageSize} OFFSET ${eventOffset}
+  `;
+
+  const [newsCount] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM news_articles
+    WHERE published_at::date BETWEEN ${range.from}::date AND ${range.to}::date
   `;
   const news = await sql<
     { published_at: string; source: string; title: string; body: string }[]
   >`
     SELECT published_at::text, source, title, body
     FROM news_articles
+    WHERE published_at::date BETWEEN ${range.from}::date AND ${range.to}::date
     ORDER BY published_at DESC
+    LIMIT ${pageSize} OFFSET ${newsOffset}
   `;
-  return { holidays, weather, events, news };
+
+  return {
+    holidays: {
+      rows: holidays,
+      total: holidayCount?.count ?? 0,
+      page: pages.holidays,
+      pageSize,
+    },
+    weather: {
+      rows: weather,
+      total: weatherCount?.count ?? 0,
+      page: pages.weather,
+      pageSize,
+    },
+    events: {
+      rows: events,
+      total: eventCount?.count ?? 0,
+      page: pages.events,
+      pageSize,
+    },
+    news: {
+      rows: news,
+      total: newsCount?.count ?? 0,
+      page: pages.news,
+      pageSize,
+    },
+  };
 }
 
 export async function opsSummary() {
@@ -187,8 +249,8 @@ export async function opsSummary() {
       COUNT(*)::int AS runs,
       COUNT(*) FILTER (WHERE status = 'error')::int AS errors,
       AVG(latency_ms)::float8 AS avg_latency,
-      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms)::float8 AS p50,
-      PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms)::float8 AS p95,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 AS p50,
+      PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 AS p95,
       SUM(input_tokens)::int AS tokens_in,
       SUM(output_tokens)::int AS tokens_out
     FROM agent_runs
@@ -230,6 +292,27 @@ export async function opsSummary() {
     ORDER BY day
   `;
   return { totals, recent, toolFails, daily };
+}
+
+export async function runById(id: string) {
+  const [row] = await sql<
+    {
+      id: string;
+      created_at: string;
+      model: string;
+      status: string;
+      latency_ms: number | null;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      error: string | null;
+      scope: string | null;
+    }[]
+  >`
+    SELECT id::text, created_at::text, model, status, latency_ms, input_tokens, output_tokens, error, scope
+    FROM agent_runs
+    WHERE id = ${id}::uuid
+  `;
+  return row ?? null;
 }
 
 export async function runSpans(runId: string) {

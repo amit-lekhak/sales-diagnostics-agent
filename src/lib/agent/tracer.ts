@@ -54,6 +54,8 @@ export async function addSpan(input: {
   error?: string | null;
   tokenCount?: number | null;
 }) {
+  const startedAt = input.startedAt.toISOString();
+  const endedAt = (input.endedAt ?? new Date()).toISOString();
   const [row] = await sql<{ id: string }[]>`
     INSERT INTO agent_spans (
       run_id, parent_span_id, kind, name, started_at, ended_at, input, output, error, token_count
@@ -62,8 +64,8 @@ export async function addSpan(input: {
       ${input.parentSpanId ?? null}::uuid,
       ${input.kind},
       ${input.name},
-      ${input.startedAt},
-      ${input.endedAt ?? new Date()},
+      ${startedAt}::timestamptz,
+      ${endedAt}::timestamptz,
       ${input.payloadIn == null ? sql`NULL` : jsonb(input.payloadIn)},
       ${input.payloadOut == null ? sql`NULL` : jsonb(truncateJson(input.payloadOut))},
       ${input.error ?? null},

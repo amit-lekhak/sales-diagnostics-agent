@@ -1,4 +1,14 @@
-import { addDays, format, parseISO } from 'date-fns';
+import {
+  addDays,
+  endOfMonth,
+  endOfQuarter,
+  format,
+  parseISO,
+  startOfMonth,
+  startOfQuarter,
+  subMonths,
+  subQuarters,
+} from 'date-fns';
 
 export const DATA_START = '2025-03-01';
 export const DATA_END = '2026-09-09';
@@ -24,6 +34,30 @@ export function priorPeriod(range: DateRange): DateRange {
   const priorTo = addDays(from, -1);
   const priorFrom = addDays(priorTo, -(days - 1));
   return { from: format(priorFrom, 'yyyy-MM-dd'), to: format(priorTo, 'yyyy-MM-dd') };
+}
+
+export function lastMonth(asOf: string = DATA_END): DateRange {
+  const prev = subMonths(parseISO(asOf), 1);
+  return {
+    from: format(startOfMonth(prev), 'yyyy-MM-dd'),
+    to: format(endOfMonth(prev), 'yyyy-MM-dd'),
+  };
+}
+
+export function lastQuarter(asOf: string = DATA_END): DateRange {
+  const prev = subQuarters(parseISO(asOf), 1);
+  return {
+    from: format(startOfQuarter(prev), 'yyyy-MM-dd'),
+    to: format(endOfQuarter(prev), 'yyyy-MM-dd'),
+  };
+}
+
+export type NamedPeriod = 'page' | 'last_month' | 'last_quarter';
+
+export function rangeForPeriod(period?: NamedPeriod | null): DateRange | null {
+  if (period === 'last_month') return lastMonth();
+  if (period === 'last_quarter') return lastQuarter();
+  return null;
 }
 
 export function yoyPeriod(range: DateRange): DateRange {
