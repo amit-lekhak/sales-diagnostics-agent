@@ -22,12 +22,12 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           {spans.map((s) => (
             <li
               key={s.id}
-              className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4 text-sm"
+              className="rounded-xl border border-(--line) bg-(--panel) p-4 text-sm"
             >
               <p className="font-medium">
                 {s.kind} · {s.name}
               </p>
-              <p className="text-xs text-[var(--muted)]">
+              <p className="text-xs text-(--muted)">
                 {s.started_at} → {s.ended_at ?? 'open'}
                 {s.token_count != null ? ` · ${s.token_count} tokens` : ''}
               </p>

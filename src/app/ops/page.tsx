@@ -20,7 +20,7 @@ export default async function OpsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">Agent ops</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
+      <p className="mt-1 text-sm text-(--muted)">
         Last 7 days of traced chat runs, stored in Postgres.
       </p>
       <div className="mt-6 grid gap-3 md:grid-cols-4">
@@ -38,15 +38,15 @@ export default async function OpsPage() {
         <Stat label="Tokens out" value={String(t.tokens_out ?? 0)} />
       </div>
       {daily.length > 0 && (
-        <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">Runs vs errors (7 days)</h2>
           <RunsChart data={daily} />
         </section>
       )}
-      <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Tool failures</h2>
         {toolFails.length === 0 ? (
-          <p className="text-sm text-[var(--muted)]">None yet.</p>
+          <p className="text-sm text-(--muted)">None yet.</p>
         ) : (
           <ul className="text-sm">
             {toolFails.map((f) => (
@@ -57,7 +57,7 @@ export default async function OpsPage() {
           </ul>
         )}
       </section>
-      <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Recent runs</h2>
         {recent.length === 0 ? (
           <EmptyState
@@ -66,7 +66,7 @@ export default async function OpsPage() {
           />
         ) : (
           <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-[var(--muted)]">
+            <thead className="text-xs uppercase text-(--muted)">
               <tr>
                 <th className="py-1">When</th>
                 <th>Status</th>
@@ -77,7 +77,7 @@ export default async function OpsPage() {
             </thead>
             <tbody>
               {recent.map((r) => (
-                <tr key={r.id} className="border-t border-[var(--line)]">
+                <tr key={r.id} className="border-t border-(--line)">
                   <td className="py-2">{r.created_at.slice(0, 19).replace('T', ' ')}</td>
                   <td>{r.status}</td>
                   <td>{r.latency_ms ?? '—'} ms</td>
@@ -101,8 +101,8 @@ export default async function OpsPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+    <div className="rounded-xl border border-(--line) bg-(--panel) p-4">
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 text-xl font-semibold">{value}</p>
     </div>
   );

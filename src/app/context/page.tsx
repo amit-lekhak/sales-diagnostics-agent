@@ -17,7 +17,7 @@ export default async function ContextPage({
   return (
     <div>
       <h1 className="text-2xl font-semibold">Context</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
+      <p className="mt-1 text-sm text-(--muted)">
         Stored holidays, weather, company events, and news the agent can join to sales.
       </p>
       <div className="mt-6">
@@ -31,7 +31,7 @@ export default async function ContextPage({
             {holidays.map((h) => (
               <li
                 key={`${h.date}-${h.name}`}
-                className="border-t border-[var(--line)] py-2"
+                className="border-t border-(--line) py-2"
               >
                 {h.date} · {h.name} {h.region ? `(${h.region})` : '(national)'}
               </li>
@@ -47,7 +47,7 @@ export default async function ContextPage({
             {events.map((e) => (
               <li
                 key={`${e.starts_on}-${e.type}`}
-                className="border-t border-[var(--line)] py-2"
+                className="border-t border-(--line) py-2"
               >
                 <span className="font-medium">{e.type}</span> {e.starts_on}–{e.ends_on}
                 {e.store ? ` · ${e.store}` : ''} — {e.notes}
@@ -60,7 +60,7 @@ export default async function ContextPage({
         <div className="max-h-80 overflow-auto text-sm">
           <table className="w-full">
             <thead>
-              <tr className="text-left text-xs uppercase text-[var(--muted)]">
+              <tr className="text-left text-xs uppercase text-(--muted)">
                 <th className="py-1">Date</th>
                 <th>Store</th>
                 <th>Rain mm</th>
@@ -72,7 +72,7 @@ export default async function ContextPage({
               {weather.map((w, i) => (
                 <tr
                   key={`${w.date}-${w.store}-${i}`}
-                  className="border-t border-[var(--line)]"
+                  className="border-t border-(--line)"
                 >
                   <td className="py-1">{w.date}</td>
                   <td>{w.store}</td>
@@ -87,12 +87,12 @@ export default async function ContextPage({
       </Section>
       <Section title="News">
         {news.map((n) => (
-          <article key={n.title} className="border-t border-[var(--line)] py-3 text-sm">
+          <article key={n.title} className="border-t border-(--line) py-3 text-sm">
             <p className="font-medium">{n.title}</p>
-            <p className="text-xs text-[var(--muted)]">
+            <p className="text-xs text-(--muted)">
               {n.source} · {n.published_at.slice(0, 10)}
             </p>
-            <p className="mt-1 text-[var(--muted)]">{n.body}</p>
+            <p className="mt-1 text-(--muted)">{n.body}</p>
           </article>
         ))}
       </Section>
@@ -102,7 +102,7 @@ export default async function ContextPage({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+    <section className="mb-6 rounded-xl border border-(--line) bg-(--panel) p-4">
       <h2 className="mb-2 text-sm font-medium">{title}</h2>
       {children}
     </section>

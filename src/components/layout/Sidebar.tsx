@@ -17,7 +17,7 @@ const links = [
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="flex w-56 shrink-0 flex-col bg-[var(--sidebar)] px-4 py-6 text-[#f5f0e8]">
+    <aside className="flex w-56 shrink-0 flex-col bg-(--sidebar) px-4 py-6 text-[#f5f0e8]">
       <div className="px-2">
         <p className="text-[11px] uppercase tracking-[0.18em] text-teal-400">
           Northstar Mart

@@ -15,7 +15,7 @@ import { ChartFrame } from './ChartFrame';
 export function SalesChart({ data }: { data: { day: string; net_sales: number }[] }) {
   if (!data.length) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted)]">
+      <div className="flex h-64 items-center justify-center text-sm text-(--muted)">
         No sales in this range.
       </div>
     );

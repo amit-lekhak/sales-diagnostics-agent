@@ -31,7 +31,7 @@ export default async function OverviewPage({
   return (
     <div>
       <h1 className="text-2xl font-semibold">Overview</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
+      <p className="mt-1 text-sm text-(--muted)">
         Paid retail sales for Northstar Mart. Chat in the corner can explain these
         numbers.
       </p>
@@ -54,12 +54,12 @@ export default async function OverviewPage({
         />
         <KpiCard label="AOV" value={kpis.aov} prior={priorKpis.aov} />
       </div>
-      <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Daily net sales</h2>
         <SalesChart data={series} />
       </section>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">Top stores</h2>
           <ul className="space-y-2 text-sm">
             {topStores.map((r) => (
@@ -70,7 +70,7 @@ export default async function OverviewPage({
             ))}
           </ul>
         </section>
-        <section className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">Top SKUs</h2>
           <ul className="space-y-2 text-sm">
             {topSkus.map((r) => (

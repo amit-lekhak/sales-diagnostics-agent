@@ -20,33 +20,33 @@ export function FilterBar({
   return (
     <form
       action={action}
-      className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3"
+      className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-(--line) bg-(--panel) p-3"
     >
-      <label className="text-xs text-[var(--muted)]">
+      <label className="text-xs text-(--muted)">
         From
         <input
           type="date"
           name="from"
           defaultValue={from}
-          className="mt-1 block rounded-md border border-[var(--line)] bg-white px-2 py-1 text-sm"
+          className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
         />
       </label>
-      <label className="text-xs text-[var(--muted)]">
+      <label className="text-xs text-(--muted)">
         To
         <input
           type="date"
           name="to"
           defaultValue={to}
-          className="mt-1 block rounded-md border border-[var(--line)] bg-white px-2 py-1 text-sm"
+          className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
         />
       </label>
       {stores && (
-        <label className="text-xs text-[var(--muted)]">
+        <label className="text-xs text-(--muted)">
           Store
           <select
             name="storeId"
             defaultValue={storeId ?? ''}
-            className="mt-1 block rounded-md border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
           >
             <option value="">All stores</option>
             {stores.map((s) => (
@@ -58,12 +58,12 @@ export function FilterBar({
         </label>
       )}
       {status !== undefined && (
-        <label className="text-xs text-[var(--muted)]">
+        <label className="text-xs text-(--muted)">
           Status
           <select
             name="status"
             defaultValue={status}
-            className="mt-1 block rounded-md border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
           >
             <option value="">All</option>
             <option value="paid">Paid</option>
@@ -75,7 +75,7 @@ export function FilterBar({
       {extra}
       <button
         type="submit"
-        className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm text-white"
+        className="rounded-md bg-(--accent) px-3 py-2 text-sm text-white"
       >
         Apply
       </button>
@@ -95,7 +95,7 @@ export function Pagination({
   hrefFor: (page: number) => string;
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (pages <= 1) return <p className="mt-3 text-sm text-[var(--muted)]">{total} rows</p>;
+  if (pages <= 1) return <p className="mt-3 text-sm text-(--muted)">{total} rows</p>;
   return (
     <div className="mt-4 flex items-center gap-3 text-sm">
       {page > 1 ? (

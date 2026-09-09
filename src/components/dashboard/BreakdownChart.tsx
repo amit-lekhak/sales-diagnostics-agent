@@ -20,7 +20,7 @@ export function BreakdownChart({
 }) {
   if (!data.length) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-[var(--muted)]">
+      <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
         No breakdown rows.
       </div>
     );
@@ -51,7 +51,7 @@ export function BreakdownChart({
 export function WaterfallChart({ data }: { data: { label: string; delta: number }[] }) {
   if (!data.length) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-[var(--muted)]">
+      <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
         No period change to plot.
       </div>
     );
@@ -107,7 +107,7 @@ export function RunsChart({
 }) {
   if (!data.length) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-[var(--muted)]">
+      <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
         No runs in the last 7 days.
       </div>
     );
@@ -135,7 +135,7 @@ export function VolumeSalesChart({
 }) {
   if (!data.length) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-[var(--muted)]">
+      <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
         No series in this range.
       </div>
     );

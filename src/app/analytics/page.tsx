@@ -45,7 +45,7 @@ export default async function AnalyticsPage({
   return (
     <div>
       <h1 className="text-2xl font-semibold">Analytics</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
+      <p className="mt-1 text-sm text-(--muted)">
         Period vs prior period of the same length. {pct(delta)} net sales.
       </p>
       <div className="mt-6">
@@ -62,16 +62,16 @@ export default async function AnalyticsPage({
         <KpiCard label="Units" value={now.units} prior={before.units} format="number" />
         <KpiCard label="AOV" value={now.aov} prior={before.aov} />
       </div>
-      <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Volume vs net sales</h2>
         <VolumeSalesChart data={series} />
       </section>
-      <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Store contribution to period change</h2>
         <WaterfallChart data={waterfall} />
       </section>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">By region</h2>
           <BreakdownChart data={byRegion} />
           <ul className="mt-2 space-y-2 text-sm">
@@ -83,11 +83,11 @@ export default async function AnalyticsPage({
             ))}
           </ul>
         </section>
-        <section className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">By store</h2>
           <BreakdownChart data={byStore} />
         </section>
-        <section className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4 md:col-span-2">
+        <section className="rounded-xl border border-(--line) bg-(--panel) p-4 md:col-span-2">
           <h2 className="mb-3 text-sm font-medium">By SKU</h2>
           <BreakdownChart data={bySku} />
         </section>

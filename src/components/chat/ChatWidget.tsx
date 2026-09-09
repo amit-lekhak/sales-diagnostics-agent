@@ -197,7 +197,7 @@ export function ChatWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-5 bottom-5 z-40 rounded-full bg-[var(--ink)] px-4 py-3 text-sm text-[#f5f0e8] shadow-lg"
+        className="fixed right-5 bottom-5 z-40 rounded-full bg-(--ink) px-4 py-3 text-sm text-[#f5f0e8] shadow-lg"
       >
         Ask sales
       </button>
@@ -205,8 +205,8 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed right-5 bottom-5 z-40 flex h-[560px] w-[380px] flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-2xl">
-      <div className="flex items-center justify-between border-b border-[var(--line)] px-3 py-2">
+    <div className="fixed right-5 bottom-5 z-40 flex h-140 w-95 flex-col overflow-hidden rounded-2xl border border-(--line) bg-(--panel) shadow-2xl">
+      <div className="flex items-center justify-between border-b border-(--line) px-3 py-2">
         <div>
           <p className="text-sm font-medium">Sales agent</p>
           <p
@@ -223,12 +223,12 @@ export function ChatWidget() {
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-sm text-[var(--muted)]"
+          className="text-sm text-(--muted)"
         >
           Close
         </button>
       </div>
-      <div className="flex gap-2 border-b border-[var(--line)] px-3 py-2 text-xs">
+      <div className="flex gap-2 border-b border-(--line) px-3 py-2 text-xs">
         <button
           type="button"
           className={clsx(
@@ -258,7 +258,7 @@ export function ChatWidget() {
         </button>
       </div>
       {threads.length > 0 && (
-        <div className="flex gap-1 overflow-x-auto border-b border-[var(--line)] px-2 py-1 text-[11px]">
+        <div className="flex gap-1 overflow-x-auto border-b border-(--line) px-2 py-1 text-[11px]">
           {threads.slice(0, 8).map((t) => (
             <button
               key={t.id}
@@ -275,20 +275,20 @@ export function ChatWidget() {
         </div>
       )}
       {summaryNote && (
-        <p className="border-b border-[var(--line)] px-3 py-1 text-[11px] text-[var(--muted)]">
+        <p className="border-b border-(--line) px-3 py-1 text-[11px] text-(--muted)">
           {summaryNote}
         </p>
       )}
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {messages.length === 0 && (
-          <div className="space-y-2 text-[var(--muted)]">
+          <div className="space-y-2 text-(--muted)">
             <p>Demo questions (numbers come from SQL tools, not the model):</p>
             <div className="flex flex-wrap gap-1">
               {DEMO_QUESTIONS.map((q) => (
                 <button
                   key={q}
                   type="button"
-                  className="rounded-full border border-[var(--line)] bg-white px-2 py-1 text-left text-[11px] text-stone-700"
+                  className="rounded-full border border-(--line) bg-white px-2 py-1 text-left text-[11px] text-stone-700"
                   onClick={() => setInput(q)}
                 >
                   {q}
@@ -309,7 +309,7 @@ export function ChatWidget() {
           </div>
         ))}
       </div>
-      <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-1 text-[11px]">
+      <div className="flex items-center justify-between border-t border-(--line) px-3 py-1 text-[11px]">
         <button
           type="button"
           className="underline"
@@ -324,14 +324,14 @@ export function ChatWidget() {
         )}
       </div>
       {showTrace && (
-        <div className="max-h-36 overflow-auto border-t border-[var(--line)] bg-stone-50 px-3 py-2 text-[11px]">
+        <div className="max-h-36 overflow-auto border-t border-(--line) bg-stone-50 px-3 py-2 text-[11px]">
           {spans.length === 0 ? (
-            <p className="text-[var(--muted)]">No spans yet. Send a question first.</p>
+            <p className="text-(--muted)">No spans yet. Send a question first.</p>
           ) : (
             <>
               <p className="mb-1 font-medium">Sources</p>
               {citations.length === 0 ? (
-                <p className="text-[var(--muted)]">No SQL citations on this run.</p>
+                <p className="text-(--muted)">No SQL citations on this run.</p>
               ) : (
                 citations.map((c, i) => <p key={`c-${i}`}>• {c}</p>)
               )}
@@ -347,7 +347,7 @@ export function ChatWidget() {
         </div>
       )}
       <form
-        className="flex gap-2 border-t border-[var(--line)] p-2"
+        className="flex gap-2 border-t border-(--line) p-2"
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -357,12 +357,12 @@ export function ChatWidget() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about sales…"
-          className="flex-1 rounded-md border border-[var(--line)] px-2 py-2 text-sm"
+          className="flex-1 rounded-md border border-(--line) px-2 py-2 text-sm"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-[var(--accent)] px-3 text-sm text-white disabled:opacity-50"
+          className="rounded-md bg-(--accent) px-3 text-sm text-white disabled:opacity-50"
         >
           Send
         </button>

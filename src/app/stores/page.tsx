@@ -28,12 +28,12 @@ export default async function StoresPage({
           from={range.from}
           to={range.to}
           extra={
-            <label className="text-xs text-[var(--muted)]">
+            <label className="text-xs text-(--muted)">
               Region
               <select
                 name="regionId"
                 defaultValue={regionId ? String(regionId) : ''}
-                className="mt-1 block rounded-md border border-[var(--line)] bg-white px-2 py-1 text-sm"
+                className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
               >
                 <option value="">All regions</option>
                 {regions.map((r) => (
@@ -49,9 +49,9 @@ export default async function StoresPage({
       {data.rows.length === 0 ? (
         <EmptyState title="No stores" body="Clear the region filter." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--panel)]">
+        <div className="overflow-x-auto rounded-xl border border-(--line) bg-(--panel)">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-[var(--line)] text-xs uppercase text-[var(--muted)]">
+            <thead className="border-b border-(--line) text-xs uppercase text-(--muted)">
               <tr>
                 <th className="px-3 py-2">Store</th>
                 <th className="px-3 py-2">City</th>
@@ -61,7 +61,7 @@ export default async function StoresPage({
             </thead>
             <tbody>
               {data.rows.map((r) => (
-                <tr key={r.id} className="border-t border-[var(--line)]">
+                <tr key={r.id} className="border-t border-(--line)">
                   <td className="px-3 py-2">{r.name}</td>
                   <td className="px-3 py-2">{r.city}</td>
                   <td className="px-3 py-2">{r.region}</td>

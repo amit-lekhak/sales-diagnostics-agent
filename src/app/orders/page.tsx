@@ -46,9 +46,9 @@ export default async function OrdersPage({
           body="Widen the date range or clear store/status filters."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--panel)]">
+        <div className="overflow-x-auto rounded-xl border border-(--line) bg-(--panel)">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-[var(--line)] text-xs uppercase text-[var(--muted)]">
+            <thead className="border-b border-(--line) text-xs uppercase text-(--muted)">
               <tr>
                 <th className="px-3 py-2">ID</th>
                 <th className="px-3 py-2">Store</th>
@@ -59,7 +59,7 @@ export default async function OrdersPage({
             </thead>
             <tbody>
               {data.rows.map((r) => (
-                <tr key={r.id} className="border-t border-[var(--line)]">
+                <tr key={r.id} className="border-t border-(--line)">
                   <td className="px-3 py-2 font-mono text-xs">{r.id}</td>
                   <td className="px-3 py-2">{r.store}</td>
                   <td className="px-3 py-2">{r.status}</td>
