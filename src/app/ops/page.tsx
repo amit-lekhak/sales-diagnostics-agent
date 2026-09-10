@@ -1,13 +1,23 @@
 import { RunsChart } from '@/components/dashboard/BreakdownChart';
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { Pagination } from '@/components/dashboard/FilterBar';
 import { dateTime } from '@/lib/format';
 import { opsSummary } from '@/lib/queries';
+import { qs, spPage } from '@/lib/search';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OpsPage() {
-  const { totals, recent, toolFails, daily } = await opsSummary();
+export default async function OpsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const page = spPage(sp, 'page');
+  const { totals, recent, recentTotal, pageSize, toolFails, daily } = await opsSummary({
+    page,
+  });
   const t = totals ?? {
     runs: 0,
     errors: 0,
@@ -17,6 +27,7 @@ export default async function OpsPage() {
     tokens_in: 0,
     tokens_out: 0,
   };
+  const hrefFor = (p: number) => `/ops${qs({ page: p })}`;
 
   return (
     <div>
@@ -24,7 +35,7 @@ export default async function OpsPage() {
       <p className="mt-1 text-sm text-(--muted)">
         Last 7 days of traced chat runs, stored in Postgres.
       </p>
-      <div className="mt-6 grid gap-3 md:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Stat label="Runs" value={String(t.runs)} />
         <Stat label="Errors" value={String(t.errors)} />
         <Stat
@@ -66,34 +77,44 @@ export default async function OpsPage() {
             body="Ask the floating chat a question to create a trace."
           />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-(--muted)">
-              <tr>
-                <th className="py-1">When</th>
-                <th>Status</th>
-                <th>Latency</th>
-                <th>Tokens</th>
-                <th>Scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((r) => (
-                <tr key={r.id} className="border-t border-(--line)">
-                  <td className="py-2">{dateTime(r.created_at)}</td>
-                  <td>{r.status}</td>
-                  <td>{r.latency_ms ?? '—'} ms</td>
-                  <td>
-                    {r.input_tokens ?? 0} / {r.output_tokens ?? 0}
-                  </td>
-                  <td>
-                    <Link className="underline" href={`/ops/${r.id}`}>
-                      {r.scope ?? 'trace'}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-(--muted)">
+                  <tr>
+                    <th className="py-1">When</th>
+                    <th>Status</th>
+                    <th>Latency</th>
+                    <th>Tokens</th>
+                    <th>Scope</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((r) => (
+                    <tr key={r.id} className="border-t border-(--line)">
+                      <td className="py-2 whitespace-nowrap">{dateTime(r.created_at)}</td>
+                      <td>{r.status}</td>
+                      <td className="whitespace-nowrap">{r.latency_ms ?? '—'} ms</td>
+                      <td className="whitespace-nowrap">
+                        {r.input_tokens ?? 0} / {r.output_tokens ?? 0}
+                      </td>
+                      <td>
+                        <Link className="underline" href={`/ops/${r.id}`}>
+                          {r.scope ?? 'trace'}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={recentTotal}
+              hrefFor={hrefFor}
+            />
+          </>
         )}
       </section>
     </div>

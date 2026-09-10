@@ -20,7 +20,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       <Link href="/ops" className="text-sm underline">
         Back to ops
       </Link>
-      <h1 className="mt-4 text-2xl font-semibold">Run {id.slice(0, 8)}</h1>
+      <h1 className="mt-4 break-all text-2xl font-semibold">Run {id.slice(0, 8)}</h1>
       <section className="mt-4 rounded-xl border border-(--line) bg-(--panel) p-4 text-sm">
         <p>
           <span className="text-(--muted)">Status</span> {run.status}

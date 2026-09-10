@@ -24,11 +24,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-      <body className="flex min-h-full">
+      <body className="flex min-h-full flex-col overflow-x-hidden md:flex-row">
         <Sidebar />
         <Suspense>
           <PageContextProvider>
-            <main className="min-h-screen flex-1 px-8 py-6">{children}</main>
+            <main className="min-h-screen min-w-0 flex-1 px-4 py-5 md:px-8 md:py-6">
+              {children}
+            </main>
             <ChatWidget />
           </PageContextProvider>
         </Suspense>

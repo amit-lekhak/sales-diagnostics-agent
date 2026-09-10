@@ -28,12 +28,12 @@ export default async function StoresPage({
           from={range.from}
           to={range.to}
           extra={
-            <label className="text-xs text-(--muted)">
+            <label className="w-full text-xs text-(--muted) sm:w-auto">
               Region
               <select
                 name="regionId"
                 defaultValue={regionId ? String(regionId) : ''}
-                className="mt-1 block rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
+                className="mt-1 block w-full rounded-md border border-(--line) bg-white px-2 py-1 text-sm"
               >
                 <option value="">All regions</option>
                 {regions.map((r) => (

@@ -226,7 +226,7 @@ export function ChatWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-5 bottom-5 z-40 rounded-full bg-(--ink) px-4 py-3 text-sm text-[#f5f0e8] shadow-lg"
+        className="fixed right-5 z-40 rounded-full bg-(--ink) px-4 py-3 text-sm text-[#f5f0e8] shadow-lg bottom-[max(1.25rem,env(safe-area-inset-bottom))]"
       >
         Ask sales
       </button>
@@ -234,13 +234,13 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed right-5 bottom-5 z-40 flex h-140 w-95 flex-col overflow-hidden rounded-2xl border border-(--line) bg-(--panel) shadow-2xl">
+    <div className="fixed inset-x-3 bottom-3 z-40 flex h-[min(35rem,85dvh)] flex-col overflow-hidden rounded-2xl border border-(--line) bg-(--panel) shadow-2xl md:inset-x-auto md:right-5 md:bottom-5 md:w-95">
       <div className="flex items-center justify-between border-b border-(--line) px-3 py-2">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium">Sales agent</p>
           <p
             className={clsx(
-              'mt-0.5 rounded px-1.5 py-0.5 text-[11px]',
+              'mt-0.5 truncate rounded px-1.5 py-0.5 text-[11px]',
               scope === 'page'
                 ? 'bg-teal-100 text-teal-900'
                 : 'bg-stone-200 text-stone-700',
@@ -252,12 +252,12 @@ export function ChatWidget() {
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-sm text-(--muted)"
+          className="shrink-0 text-sm text-(--muted)"
         >
           Close
         </button>
       </div>
-      <div className="flex gap-2 border-b border-(--line) px-3 py-2 text-xs">
+      <div className="flex flex-wrap gap-2 border-b border-(--line) px-3 py-2 text-xs">
         <button
           type="button"
           className={clsx(
@@ -289,7 +289,7 @@ export function ChatWidget() {
       {visibleThreads.length > 0 && (
         <div className="flex gap-1 overflow-x-auto border-b border-(--line) px-2 py-1 text-[11px]">
           {visibleThreads.map((t) => (
-            <div key={t.id} className="group relative shrink-0">
+            <div key={t.id} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => void loadConversation(t.id)}
@@ -304,7 +304,7 @@ export function ChatWidget() {
                 type="button"
                 aria-label="Close chat"
                 className={clsx(
-                  'absolute right-0.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-xs leading-none group-hover:flex hover:bg-black/20',
+                  'absolute right-0.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-xs leading-none hover:bg-black/20',
                   t.id === conversationId ? 'text-white' : 'text-stone-600',
                 )}
                 onClick={(e) => {

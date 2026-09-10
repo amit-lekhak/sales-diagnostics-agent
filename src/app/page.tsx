@@ -54,18 +54,18 @@ export default async function OverviewPage({
         />
         <KpiCard label="AOV" value={kpis.aov} prior={priorKpis.aov} />
       </div>
-      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
+      <section className="mt-6 min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Daily net sales</h2>
         <SalesChart data={series} />
       </section>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-2">
         <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">Top stores</h2>
           <ul className="space-y-2 text-sm">
             {topStores.map((r) => (
-              <li key={r.key} className="flex justify-between">
-                <span>{r.label}</span>
-                <span>{money(r.net_sales)}</span>
+              <li key={r.key} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{r.label}</span>
+                <span className="shrink-0">{money(r.net_sales)}</span>
               </li>
             ))}
           </ul>
@@ -74,9 +74,9 @@ export default async function OverviewPage({
           <h2 className="mb-3 text-sm font-medium">Top SKUs</h2>
           <ul className="space-y-2 text-sm">
             {topSkus.map((r) => (
-              <li key={r.key} className="flex justify-between">
-                <span>{r.label}</span>
-                <span>{money(r.net_sales)}</span>
+              <li key={r.key} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{r.label}</span>
+                <span className="shrink-0">{money(r.net_sales)}</span>
               </li>
             ))}
           </ul>

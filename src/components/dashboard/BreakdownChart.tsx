@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import { money, moneyAxisTick, num } from '@/lib/format';
+import { useIsMd } from '@/lib/use-media';
 import { ChartFrame } from './ChartFrame';
 
 export function BreakdownChart({
@@ -18,6 +19,7 @@ export function BreakdownChart({
 }: {
   data: { label: string; net_sales: number }[];
 }) {
+  const isMd = useIsMd();
   if (!data.length) {
     return (
       <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
@@ -39,7 +41,12 @@ export function BreakdownChart({
             tick={{ fontSize: 11 }}
             tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
-          <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11 }} />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={isMd ? 110 : 72}
+            tick={{ fontSize: isMd ? 11 : 10 }}
+          />
           <Tooltip formatter={(v) => money(Number(v))} />
           <Bar
             dataKey="net_sales"
@@ -54,6 +61,7 @@ export function BreakdownChart({
 }
 
 export function WaterfallChart({ data }: { data: { label: string; delta: number }[] }) {
+  const isMd = useIsMd();
   if (!data.length) {
     return (
       <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
@@ -78,12 +86,28 @@ export function WaterfallChart({ data }: { data: { label: string; delta: number 
   return (
     <ChartFrame heightClass="h-56">
       <ResponsiveContainer>
-        <BarChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <BarChart
+          data={rows}
+          margin={{
+            top: 8,
+            right: 8,
+            left: isMd ? 8 : 0,
+            bottom: isMd ? 0 : 28,
+          }}
+        >
           <CartesianGrid stroke="#e7e0d4" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 10 }}
+            interval="preserveStartEnd"
+            angle={isMd ? 0 : -45}
+            textAnchor={isMd ? 'middle' : 'end'}
+            height={isMd ? 30 : 50}
+          />
           <YAxis
             tick={{ fontSize: 11 }}
             tickFormatter={(v) => moneyAxisTick(Number(v))}
+            width={isMd ? 60 : 48}
           />
           <Tooltip
             formatter={(v, name) =>
@@ -138,6 +162,7 @@ export function VolumeSalesChart({
 }: {
   data: { day: string; net_sales: number; units: number }[];
 }) {
+  const isMd = useIsMd();
   if (!data.length) {
     return (
       <div className="flex h-48 items-center justify-center text-sm text-(--muted)">
@@ -148,15 +173,33 @@ export function VolumeSalesChart({
   return (
     <ChartFrame heightClass="h-64">
       <ResponsiveContainer>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <BarChart
+          data={data}
+          margin={{
+            top: 8,
+            right: isMd ? 8 : 4,
+            left: isMd ? 8 : 0,
+            bottom: 0,
+          }}
+        >
           <CartesianGrid stroke="#e7e0d4" vertical={false} />
-          <XAxis dataKey="day" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <XAxis
+            dataKey="day"
+            tick={{ fontSize: isMd ? 11 : 10 }}
+            interval="preserveStartEnd"
+          />
           <YAxis
             yAxisId="sales"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: isMd ? 11 : 10 }}
+            width={isMd ? 60 : 44}
             tickFormatter={(v) => moneyAxisTick(Number(v))}
           />
-          <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 11 }} />
+          <YAxis
+            yAxisId="units"
+            orientation="right"
+            tick={{ fontSize: isMd ? 11 : 10 }}
+            width={isMd ? 40 : 32}
+          />
           <Tooltip
             formatter={(v, name) =>
               name === 'Net sales' ? money(Number(v)) : num(Number(v))

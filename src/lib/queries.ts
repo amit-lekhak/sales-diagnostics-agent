@@ -233,7 +233,11 @@ export async function contextTables(
   };
 }
 
-export async function opsSummary() {
+export async function opsSummary(opts?: { page?: number; pageSize?: number }) {
+  const page = Math.max(1, opts?.page ?? 1);
+  const pageSize = opts?.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
+
   const [totals] = await sql<
     {
       runs: number;
@@ -256,6 +260,9 @@ export async function opsSummary() {
     FROM agent_runs
     WHERE created_at > NOW() - INTERVAL '7 days'
   `;
+  const [countRow] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM agent_runs
+  `;
   const recent = await sql<
     {
       id: string;
@@ -272,7 +279,7 @@ export async function opsSummary() {
     SELECT id::text, created_at::text, model, status, latency_ms, input_tokens, output_tokens, error, scope
     FROM agent_runs
     ORDER BY created_at DESC
-    LIMIT 40
+    LIMIT ${pageSize} OFFSET ${offset}
   `;
   const toolFails = await sql<{ name: string; fails: number }[]>`
     SELECT name, COUNT(*)::int AS fails
@@ -291,7 +298,15 @@ export async function opsSummary() {
     GROUP BY created_at::date
     ORDER BY day
   `;
-  return { totals, recent, toolFails, daily };
+  return {
+    totals,
+    recent,
+    recentTotal: countRow?.count ?? 0,
+    page,
+    pageSize,
+    toolFails,
+    daily,
+  };
 }
 
 export async function runById(id: string) {

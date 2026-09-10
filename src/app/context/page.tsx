@@ -88,7 +88,7 @@ export default async function ContextPage({
         {weather.rows.length === 0 ? (
           <EmptyState title="No weather in range" body="Widen dates." />
         ) : (
-          <div className="text-sm">
+          <div className="overflow-x-auto text-sm">
             <table className="w-full">
               <thead>
                 <tr className="text-left text-xs uppercase text-(--muted)">
@@ -105,8 +105,8 @@ export default async function ContextPage({
                     key={`${w.date}-${w.store}-${i}`}
                     className="border-t border-(--line)"
                   >
-                    <td className="py-1">{w.date}</td>
-                    <td>{w.store}</td>
+                    <td className="py-1 whitespace-nowrap">{w.date}</td>
+                    <td className="whitespace-nowrap">{w.store}</td>
                     <td>{w.rain_mm}</td>
                     <td>{w.temp_c}°C</td>
                     <td>{w.source}</td>

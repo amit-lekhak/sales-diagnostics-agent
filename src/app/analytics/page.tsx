@@ -62,32 +62,32 @@ export default async function AnalyticsPage({
         <KpiCard label="Units" value={now.units} prior={before.units} format="number" />
         <KpiCard label="AOV" value={now.aov} prior={before.aov} />
       </div>
-      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
+      <section className="mt-6 min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Volume vs net sales</h2>
         <VolumeSalesChart data={series} />
       </section>
-      <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
+      <section className="mt-6 min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4">
         <h2 className="mb-3 text-sm font-medium">Store contribution to period change</h2>
         <WaterfallChart data={waterfall} />
       </section>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
+      <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-2">
+        <section className="min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">By region</h2>
           <BreakdownChart data={byRegion} />
           <ul className="mt-2 space-y-2 text-sm">
             {byRegion.map((r) => (
-              <li key={r.key} className="flex justify-between">
-                <span>{r.label}</span>
-                <span>{money(r.net_sales)}</span>
+              <li key={r.key} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{r.label}</span>
+                <span className="shrink-0">{money(r.net_sales)}</span>
               </li>
             ))}
           </ul>
         </section>
-        <section className="rounded-xl border border-(--line) bg-(--panel) p-4">
+        <section className="min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4">
           <h2 className="mb-3 text-sm font-medium">By store</h2>
           <BreakdownChart data={byStore} />
         </section>
-        <section className="rounded-xl border border-(--line) bg-(--panel) p-4 md:col-span-2">
+        <section className="min-w-0 rounded-xl border border-(--line) bg-(--panel) p-4 md:col-span-2">
           <h2 className="mb-3 text-sm font-medium">By SKU</h2>
           <BreakdownChart data={bySku} />
         </section>
