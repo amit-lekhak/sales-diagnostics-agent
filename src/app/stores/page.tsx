@@ -1,5 +1,8 @@
+import Link from 'next/link';
 import { FilterBar, Pagination } from '@/components/dashboard/FilterBar';
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { money, num } from '@/lib/format';
+import { breakdown } from '@/lib/metrics';
 import { listRegions, paginatedStores } from '@/lib/queries';
 import { qs, rangeFromSearch, spStr } from '@/lib/search';
 
@@ -16,6 +19,8 @@ export default async function StoresPage({
   const page = Math.max(1, Number(spStr(sp, 'page') ?? 1));
   const regions = await listRegions();
   const data = await paginatedStores({ page, regionId });
+  const salesRows = await breakdown('store', { ...range, regionId }, 200);
+  const salesById = new Map(salesRows.map((r) => [Number(r.key), r]));
   const hrefFor = (p: number) =>
     `/stores${qs({ from: range.from, to: range.to, regionId, page: p })}`;
 
@@ -27,6 +32,7 @@ export default async function StoresPage({
           action="/stores"
           from={range.from}
           to={range.to}
+          preserve={{ regionId }}
           extra={
             <label className="w-full text-xs text-(--muted) sm:w-auto">
               Region
@@ -56,20 +62,43 @@ export default async function StoresPage({
                 <th className="px-3 py-2">Store</th>
                 <th className="px-3 py-2">City</th>
                 <th className="px-3 py-2">Region</th>
+                <th className="px-3 py-2 text-right">Net sales</th>
+                <th className="px-3 py-2 text-right">Units</th>
                 <th className="px-3 py-2">Lat / lon</th>
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.id} className="border-t border-(--line)">
-                  <td className="px-3 py-2">{r.name}</td>
-                  <td className="px-3 py-2">{r.city}</td>
-                  <td className="px-3 py-2">{r.region}</td>
-                  <td className="px-3 py-2 font-mono text-xs">
-                    {r.lat.toFixed(3)}, {r.lon.toFixed(3)}
-                  </td>
-                </tr>
-              ))}
+              {data.rows.map((r) => {
+                const sales = salesById.get(r.id);
+                return (
+                  <tr key={r.id} className="border-t border-(--line)">
+                    <td className="px-3 py-2">
+                      <Link
+                        className="underline"
+                        href={`/stores${qs({
+                          from: range.from,
+                          to: range.to,
+                          regionId,
+                          storeId: r.id,
+                        })}`}
+                      >
+                        {r.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">{r.city}</td>
+                    <td className="px-3 py-2">{r.region}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">
+                      {sales ? money(sales.net_sales) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">
+                      {sales ? num(sales.units) : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {r.lat.toFixed(3)}, {r.lon.toFixed(3)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,6 +1,7 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { ensureGeminiKey } from './provider-config';
 import {
   classifyProviderError,
   isFailOpenCode,
@@ -9,7 +10,7 @@ import {
 import { addSpan } from './tracer';
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
-const CLASSIFIER_TIMEOUT_MS = Number(process.env.TOPIC_GUARD_TIMEOUT_MS ?? 15_000);
+const CLASSIFIER_TIMEOUT_MS = Number(process.env.TOPIC_GUARD_TIMEOUT_MS ?? 8_000);
 
 const decisionSchema = z.object({
   allowed: z.boolean(),
@@ -47,9 +48,7 @@ export async function classifyTopic(
   runId: string,
 ): Promise<TopicDecision> {
   const startedAt = new Date();
-  if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-  }
+  ensureGeminiKey();
 
   try {
     const result = await generateObject({

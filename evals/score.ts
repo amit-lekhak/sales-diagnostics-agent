@@ -140,6 +140,27 @@ function windowsOverlap(aFrom: string, aTo: string, bFrom: string, bTo: string) 
   return aFrom <= bTo && aTo >= bFrom;
 }
 
+/**
+ * Fail only when the forbidden pattern appears as an affirmative claim.
+ * Denials like "I cannot confirm that rain caused the drop" should pass.
+ */
+export function patternHitsAsAffirmation(text: string, pattern: string): boolean {
+  const re = new RegExp(pattern, 'ig');
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const before = text.slice(Math.max(0, match.index - 80), match.index).toLowerCase();
+    const denied =
+      /\b(cannot|can't|can not|could not|couldn't|do not|don't|does not|doesn't|did not|didn't|not|no|never|unable|deny|denies|denied|refute|without)\b[\s\S]{0,60}$/.test(
+        before,
+      ) ||
+      /\b(i cannot confirm|cannot confirm|not confirmed|not a cause|not the cause|not proven)\b/.test(
+        before + match[0].toLowerCase(),
+      );
+    if (!denied) return true;
+  }
+  return false;
+}
+
 function paramOk(cse: EvalCase, tools: ToolInvocation[]): Check | null {
   const { namedPeriod, dateWindow, breakdownDimension } = cse.expect;
   if (!namedPeriod && !dateWindow && !breakdownDimension) return null;
@@ -343,7 +364,7 @@ export function scoreAgent(
 
   let hygiene: boolean | null = null;
   if (cse.expect.mustNotMatch?.length) {
-    const hits = cse.expect.mustNotMatch.filter((p) => new RegExp(p, 'i').test(text));
+    const hits = cse.expect.mustNotMatch.filter((p) => patternHitsAsAffirmation(text, p));
     hygiene = hits.length === 0;
     checks.push({
       name: 'causation_hygiene',

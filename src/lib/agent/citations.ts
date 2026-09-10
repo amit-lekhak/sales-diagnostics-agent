@@ -60,11 +60,12 @@ export function citationsFromSpans(spans: TraceSpan[]): string[] {
     } else if (span.name === 'list_context_events') {
       const holidays = Array.isArray(out.holidays) ? out.holidays.length : 0;
       const events = Array.isArray(out.company_events) ? out.company_events.length : 0;
+      const promos = Array.isArray(out.promotions) ? out.promotions.length : 0;
       const weather = Array.isArray(out.weather_by_store)
         ? out.weather_by_store.length
         : 0;
       lines.push(
-        `Stored context: ${holidays} holidays, ${events} company events, ${weather} weather store rows (correlation, not cause)`,
+        `Stored context: ${holidays} holidays, ${events} company events, ${promos} promotions, ${weather} weather store rows (correlation, not cause)`,
       );
     } else if (span.name === 'search_news') {
       const matches = Array.isArray(out.matches) ? out.matches : [];

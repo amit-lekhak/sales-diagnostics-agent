@@ -21,6 +21,7 @@ export type PageSpec = {
   to?: string;
   regionName?: string;
   storeName?: string;
+  productName?: string;
 };
 
 export type FilterSpec = {
@@ -29,6 +30,7 @@ export type FilterSpec = {
   to?: string;
   regionName?: string;
   storeName?: string;
+  productName?: string;
 };
 
 export type OracleSpec =
@@ -71,6 +73,8 @@ export type EvalCase = {
   page: PageSpec;
   oracle: OracleSpec;
   expect: ExpectSpec;
+  /** Prior turns for multi-turn cases (fed to slot fill + analyst). */
+  recentTurns?: { role: string; content: string }[];
 };
 
 const overview: PageSpec = {
@@ -100,6 +104,59 @@ export const EVAL_CASES: EvalCase[] = [
     page: overview,
     oracle: { kind: 'get_metric', metric: 'units', period: 'last_quarter' },
     expect: { tools: ['get_metric'], namedPeriod: 'last_quarter' },
+  },
+  {
+    id: 'sql-aov-last-month',
+    type: 'sql',
+    scenario: 'kpi',
+    question: 'What was average order value last month?',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'aov', period: 'last_month' },
+    expect: { tools: ['get_metric'], namedPeriod: 'last_month' },
+  },
+  {
+    id: 'sql-sku-breakdown',
+    type: 'sql',
+    scenario: 'kpi',
+    question: 'Which SKUs sold the most last month?',
+    scope: 'all',
+    page: overview,
+    oracle: {
+      kind: 'breakdown',
+      dimension: 'sku',
+      period: 'last_month',
+    },
+    expect: {
+      tools: ['breakdown'],
+      namedPeriod: 'last_month',
+      breakdownDimension: 'sku',
+      labelsAny: ['Green Tea', 'ShieldGuard Soap', 'Mint Toothpaste'],
+    },
+  },
+  {
+    id: 'sql-product-page',
+    type: 'sql',
+    scenario: 'page_scope',
+    question: 'What were net sales for this product last month?',
+    scope: 'page',
+    page: {
+      page: 'products',
+      pathname: '/products',
+      from: '2026-08-01',
+      to: '2026-08-31',
+      productName: 'ShieldGuard Soap',
+    },
+    oracle: {
+      kind: 'get_metric',
+      metric: 'net_sales',
+      period: 'last_month',
+      productName: 'ShieldGuard Soap',
+    },
+    expect: {
+      tools: ['get_metric'],
+      namedPeriod: 'last_month',
+    },
   },
   {
     id: 'sql-west-july-page',
@@ -180,6 +237,107 @@ export const EVAL_CASES: EvalCase[] = [
     expect: {
       toolsAny: ['compare_periods', 'get_metric'],
       dateWindow: { from: '2025-10-20', to: '2025-10-26' },
+    },
+  },
+  {
+    id: 'sql-delhi-diwali-yoy-mode',
+    type: 'sql',
+    scenario: 'delhi_diwali',
+    question: 'Compare Delhi net sales 20–26 Oct 2025 year over year using YoY mode',
+    scope: 'all',
+    page: overview,
+    oracle: {
+      kind: 'get_metric_pair',
+      metric: 'net_sales',
+      left: { from: '2025-10-20', to: '2025-10-26', regionName: 'North' },
+      right: { from: '2024-10-20', to: '2024-10-26', regionName: 'North' },
+      relation: 'left_gt_right',
+    },
+    expect: {
+      toolsAny: ['compare_periods', 'get_metric'],
+      dateWindow: { from: '2025-10-20', to: '2025-10-26' },
+    },
+  },
+  {
+    id: 'sem-out-of-range',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'What were net sales in January 2024?',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'net_sales', period: 'last_month' },
+    expect: {
+      toolsAny: ['get_metric'],
+      mustMentionAny: [
+        ['2025', 'no data', 'outside', 'before', 'not available', 'seed', 'March'],
+      ],
+    },
+  },
+  {
+    id: 'sem-followup-rain-caused',
+    type: 'semantic',
+    scenario: 'mumbai_july',
+    question: 'so rain caused it?',
+    scope: 'all',
+    page: overview,
+    recentTurns: [
+      {
+        role: 'user',
+        content: 'Why did sales drop in July 2026 in Mumbai?',
+      },
+      {
+        role: 'assistant',
+        content:
+          'Mumbai July 2026 net sales fell vs June. ShieldGuard stockout at Andheri overlapped the drop; heavy rain also overlapped but is correlation only.',
+      },
+    ],
+    oracle: {
+      kind: 'list_context_events',
+      from: '2026-07-01',
+      to: '2026-07-31',
+      storeName: 'Mumbai',
+    },
+    expect: {
+      toolsAny: [
+        'list_context_events',
+        'explain_change',
+        'get_metric',
+        'compare_periods',
+      ],
+      mustNotMatch: ['yes,? rain caused', 'caused by (the )?rain', 'rain was the cause'],
+      mustMentionAny: [
+        [
+          'overlap',
+          'overlapped',
+          'correlat',
+          'cannot confirm',
+          'do not',
+          "don't",
+          'not cause',
+          'ShieldGuard',
+          'stockout',
+        ],
+      ],
+    },
+  },
+  {
+    id: 'sem-diagnose-place-only-defaults-window',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'Why did sales drop in Mumbai?',
+    scope: 'all',
+    page: overview,
+    oracle: {
+      kind: 'explain_change',
+      from: '2026-08-11',
+      to: '2026-09-09',
+      storeName: 'Mumbai',
+      dimension: 'store',
+    },
+    expect: {
+      // Intentional: place present → window defaults to page range (not clarify).
+      toolsAny: ['explain_change', 'get_metric', 'list_context_events'],
+      mustMentionAny: [['Mumbai', 'Andheri', 'Bandra']],
     },
   },
   {
@@ -429,6 +587,24 @@ export const EVAL_CASES: EvalCase[] = [
       tools: ['get_metric'],
       namedPeriod: 'last_month',
       mustMentionAny: [['₹', 'Net sales', 'net sales']],
+    },
+  },
+  {
+    id: 'sem-pos-outage-context',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'Any company events around 3 Apr 2026?',
+    scope: 'all',
+    page: overview,
+    oracle: {
+      kind: 'list_context_events',
+      from: '2026-04-01',
+      to: '2026-04-05',
+    },
+    expect: {
+      tools: ['list_context_events'],
+      dateWindow: { from: '2026-04-01', to: '2026-04-05' },
+      mustMentionAny: [['outage', 'POS', 'pos']],
     },
   },
   {

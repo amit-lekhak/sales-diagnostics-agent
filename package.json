@@ -14,6 +14,7 @@
     "db:reset": "tsx scripts/seed.ts",
     "weather:sync": "tsx scripts/sync-weather.ts",
     "eval": "tsx evals/runner.ts",
+    "test": "tsx --test src/lib/agent/provider-errors.test.ts src/lib/agent/slot-fill.test.ts src/lib/metrics.test.ts",
     "test:provider-errors": "tsx --test src/lib/agent/provider-errors.test.ts"
   },
   "dependencies": {

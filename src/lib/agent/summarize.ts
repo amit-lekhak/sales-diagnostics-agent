@@ -1,11 +1,10 @@
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { sql } from '../db';
+import { ensureGeminiKey } from './provider-config';
 import { addSpan } from './tracer';
 
-if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-}
+ensureGeminiKey();
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
 const WINDOW = 12;

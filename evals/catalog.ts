@@ -1,6 +1,6 @@
 import { sql } from '../src/lib/db';
 import { defaultRange } from '../src/lib/dates';
-import { resolvePlace } from '../src/lib/dimensions';
+import { resolvePlace, resolveProduct } from '../src/lib/dimensions';
 import type { MetricFilters } from '../src/lib/metrics';
 import type { PageContext } from '../src/lib/page-context';
 import type { FilterSpec, PageSpec } from './cases';
@@ -60,12 +60,17 @@ export async function resolveFilter(
   if (spec.regionName && place.regionId == null) {
     throw new Error(`Unknown region "${spec.regionName}"`);
   }
+  const productId = await resolveProduct({ productName: spec.productName });
+  if (spec.productName && productId == null) {
+    throw new Error(`Unknown product "${spec.productName}"`);
+  }
   return {
     from: spec.from ?? fallback.from,
     to: spec.to ?? fallback.to,
     storeId: place.storeId,
     regionId: place.regionId,
     city: place.city,
+    productId,
   };
 }
 
@@ -83,6 +88,10 @@ export async function resolvePage(
   if (spec.regionName && place.regionId == null) {
     throw new Error(`Unknown region "${spec.regionName}"`);
   }
+  const productId = await resolveProduct({ productName: spec.productName });
+  if (spec.productName && productId == null) {
+    throw new Error(`Unknown product "${spec.productName}"`);
+  }
   return {
     page: spec.page,
     pathname: spec.pathname,
@@ -90,5 +99,6 @@ export async function resolvePage(
     to: spec.to,
     storeId: place.storeId,
     regionId: place.regionId,
+    productId,
   };
 }

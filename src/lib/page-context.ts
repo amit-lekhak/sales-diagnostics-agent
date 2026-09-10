@@ -10,6 +10,10 @@ export type PageContext = {
   productId?: number;
   regionId?: number;
   status?: string;
+  /** Human labels for chat chip (optional; filled client-side). */
+  storeLabel?: string;
+  productLabel?: string;
+  regionLabel?: string;
 };
 
 export type ChatScope = 'page' | 'all';
@@ -18,9 +22,9 @@ export function describePageContext(ctx: PageContext, scope: ChatScope): string 
   if (scope === 'all') return 'All company data';
   const bits = [labelForPage(ctx.page)];
   if (ctx.from && ctx.to) bits.push(`${ctx.from} → ${ctx.to}`);
-  if (ctx.storeId) bits.push(`store #${ctx.storeId}`);
-  if (ctx.productId) bits.push(`product #${ctx.productId}`);
-  if (ctx.regionId) bits.push(`region #${ctx.regionId}`);
+  if (ctx.storeId) bits.push(ctx.storeLabel ?? `store #${ctx.storeId}`);
+  if (ctx.productId) bits.push(ctx.productLabel ?? `product #${ctx.productId}`);
+  if (ctx.regionId) bits.push(ctx.regionLabel ?? `region #${ctx.regionId}`);
   if (ctx.status) bits.push(ctx.status);
   return bits.join(' · ');
 }

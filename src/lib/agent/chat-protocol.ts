@@ -34,6 +34,13 @@ export const sseEventSchema = z.discriminatedUnion('type', [
     runId: z.string().optional(),
   }),
   z.object({
+    type: z.literal('tool'),
+    phase: z.enum(['start', 'done']),
+    name: z.string(),
+    conversationId: z.string().optional(),
+    runId: z.string().optional(),
+  }),
+  z.object({
     type: z.literal('done'),
     conversationId: z.string(),
     runId: z.string(),

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { lastMonth, lastQuarter } from '@/lib/dates';
 
 export function FilterBar({
   action,
@@ -8,6 +9,7 @@ export function FilterBar({
   stores,
   status,
   extra,
+  preserve,
 }: {
   action: string;
   from: string;
@@ -16,7 +18,22 @@ export function FilterBar({
   stores?: { id: number; name: string }[];
   status?: string;
   extra?: React.ReactNode;
+  /** Extra query keys to keep on Last month / Last quarter preset links. */
+  preserve?: Record<string, string | number | undefined | null>;
 }) {
+  const month = lastMonth();
+  const quarter = lastQuarter();
+  const presetQs = (range: { from: string; to: string }) => {
+    const u = new URLSearchParams();
+    u.set('from', range.from);
+    u.set('to', range.to);
+    if (storeId) u.set('storeId', storeId);
+    if (status) u.set('status', status);
+    for (const [k, v] of Object.entries(preserve ?? {})) {
+      if (v != null && v !== '') u.set(k, String(v));
+    }
+    return `?${u.toString()}`;
+  };
   return (
     <form
       action={action}
@@ -79,6 +96,20 @@ export function FilterBar({
       >
         Apply
       </button>
+      <div className="flex w-full flex-wrap gap-2 text-[11px] sm:w-auto">
+        <Link
+          href={`${action}${presetQs(month)}`}
+          className="rounded border border-(--line) bg-white px-2 py-1 text-stone-700"
+        >
+          Last month
+        </Link>
+        <Link
+          href={`${action}${presetQs(quarter)}`}
+          className="rounded border border-(--line) bg-white px-2 py-1 text-stone-700"
+        >
+          Last quarter
+        </Link>
+      </div>
     </form>
   );
 }

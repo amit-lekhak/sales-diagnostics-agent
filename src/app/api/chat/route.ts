@@ -7,6 +7,7 @@ import type { ChatScope, PageContext } from '@/lib/page-context';
 import { buildAiTools } from '@/lib/agent/ai-tools';
 import { chatRequestSchema } from '@/lib/agent/chat-protocol';
 import { systemPrompt } from '@/lib/agent/prompts';
+import { ensureGeminiKey } from '@/lib/agent/provider-config';
 import { classifyProviderError, type ClassifiedError } from '@/lib/agent/provider-errors';
 import { loadConversationContext, maybeSummarize } from '@/lib/agent/summarize';
 import { fillSlots } from '@/lib/agent/slot-fill';
@@ -27,13 +28,19 @@ function jsonb(value: unknown) {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const ANALYST_TIMEOUT_MS = Number(process.env.CHAT_ANALYST_TIMEOUT_MS ?? 55_000);
+/** Soft ceiling for the whole request so platform maxDuration is not exceeded. */
+const ROUTE_BUDGET_MS = Number(process.env.CHAT_ROUTE_BUDGET_MS ?? 58_000);
+const ANALYST_TIMEOUT_CAP_MS = Number(process.env.CHAT_ANALYST_TIMEOUT_MS ?? 45_000);
+const ANALYST_TIMEOUT_FLOOR_MS = 5_000;
 
-if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-}
+ensureGeminiKey();
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
+
+function remainingAnalystTimeout(started: number): number {
+  const left = ROUTE_BUDGET_MS - (Date.now() - started);
+  return Math.max(ANALYST_TIMEOUT_FLOOR_MS, Math.min(ANALYST_TIMEOUT_CAP_MS, left));
+}
 
 async function persistProviderError(input: {
   convId: string;
@@ -130,6 +137,19 @@ export async function POST(req: Request) {
         RETURNING id::text AS id
       `;
       conversationId = c!.id;
+    } else {
+      const existing = await sql<{ id: string }[]>`
+        SELECT id::text AS id FROM conversations WHERE id = ${conversationId}::uuid
+      `;
+      if (!existing[0]) {
+        return Response.json(
+          {
+            error: 'conversation_not_found',
+            text: 'That conversation was not found. Start a new chat.',
+          },
+          { status: 404 },
+        );
+      }
     }
     const convId = conversationId;
 
@@ -251,6 +271,16 @@ export async function POST(req: Request) {
       return Response.json({ conversationId: convId, runId, text });
     }
 
+    if (slotsResult.action === 'fail_open') {
+      await addSpan({
+        runId,
+        kind: 'guard',
+        name: 'slot_filler_fail_open',
+        startedAt: new Date(),
+        payloadOut: { action: 'fail_open', reason: slotsResult.reason },
+      });
+    }
+
     const filledSlots = slotsResult.action === 'ready' ? slotsResult.slots : null;
 
     const dimensions = formatDimensionsPrompt(await loadDimensions());
@@ -269,13 +299,14 @@ export async function POST(req: Request) {
       })),
     ];
 
+    const analystTimeoutMs = remainingAnalystTimeout(started);
     const result = streamText({
       model: google(MODEL),
       system: systemPrompt(scope, page, range, dimensions, filledSlots),
       messages,
       stopWhen: stepCountIs(8),
       tools: buildAiTools(rt),
-      abortSignal: AbortSignal.timeout(ANALYST_TIMEOUT_MS),
+      abortSignal: AbortSignal.timeout(analystTimeoutMs),
     });
 
     async function persistOk(
@@ -357,25 +388,54 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: 'meta', conversationId: convId, runId })}\n\n`,
-          ),
-        );
+        const enqueue = (payload: unknown) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        };
+        enqueue({ type: 'meta', conversationId: convId, runId });
         let persisted = false;
         try {
-          for await (const delta of result.textStream) {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: 'delta', text: delta })}\n\n`,
-              ),
-            );
+          // Prefer fullStream so tool progress can surface while waiting on text.
+          const full = result.fullStream;
+          for await (const part of full) {
+            if (part.type === 'tool-call') {
+              enqueue({
+                type: 'tool',
+                phase: 'start',
+                name: part.toolName,
+                conversationId: convId,
+                runId,
+              });
+            } else if (part.type === 'tool-result') {
+              enqueue({
+                type: 'tool',
+                phase: 'done',
+                name: part.toolName,
+                conversationId: convId,
+                runId,
+              });
+            } else if (part.type === 'text-delta') {
+              const text =
+                'text' in part
+                  ? String(part.text)
+                  : 'delta' in part
+                    ? String((part as { delta: unknown }).delta)
+                    : '';
+              if (text) {
+                enqueue({
+                  type: 'delta',
+                  text,
+                  conversationId: convId,
+                  runId,
+                });
+              }
+            }
           }
           const text = (await result.text) ?? '';
           const usage = await result.usage;
           try {
             await persistOk(text, usage);
             persisted = true;
+            enqueue({ type: 'done', conversationId: convId, runId });
           } catch (persistErr) {
             const classified = classifyProviderError(persistErr);
             await finishRun(runId!, {
@@ -384,12 +444,16 @@ export async function POST(req: Request) {
               error: classified.raw,
             });
             await captureSentry(classified.raw);
+            enqueue({
+              type: 'error',
+              error:
+                'Answer generated but could not be saved. Refresh may lose this reply — try again.',
+              code: classified.code,
+              retryAfterMs: classified.retryAfterMs,
+              conversationId: convId,
+              runId,
+            });
           }
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: 'done', conversationId: convId, runId })}\n\n`,
-            ),
-          );
         } catch (err) {
           const classified = classifyProviderError(err);
           if (!persisted) {
@@ -405,18 +469,14 @@ export async function POST(req: Request) {
               await captureSentry(classified.raw);
             }
           }
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'error',
-                error: classified.userMessage,
-                code: classified.code,
-                retryAfterMs: classified.retryAfterMs,
-                conversationId: convId,
-                runId,
-              })}\n\n`,
-            ),
-          );
+          enqueue({
+            type: 'error',
+            error: classified.userMessage,
+            code: classified.code,
+            retryAfterMs: classified.retryAfterMs,
+            conversationId: convId,
+            runId,
+          });
         } finally {
           controller.close();
         }

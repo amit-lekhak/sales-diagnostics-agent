@@ -1,4 +1,4 @@
-import { lastMonth, lastQuarter } from '../dates';
+import { DATA_END, DATA_START, lastMonth, lastQuarter } from '../dates';
 import { describePageContext, type ChatScope, type PageContext } from '../page-context';
 import { METRIC_DEFS } from '../metrics';
 import type { FilledSlots } from './slot-fill';
@@ -31,10 +31,12 @@ Rules:
 - Metric definitions are fixed:
 ${metrics}
 - If a tool fails or returns empty, say you do not know.
+- Seeded retail data covers ${DATA_START} through ${DATA_END}. If the user asks outside that window, say the seeded data starts ${DATA_START} and ends ${DATA_END}; still call tools if useful and report zero / empty honestly.
 - Weather, holidays, and news overlapping a dip are correlations unless a company_event also matches. Say "overlapped" not "caused".
 - When diagnosing a drop: call explain_change, list_context_events, and search_news for the same place/window. Lead the answer with company events (stockout, promo end) and relevant news (port congestion, competitor promo). Mention weather last, and only as overlap — never as the main explanation.
 - Include the unexplained remainder from explain_change (including when it is ₹0). Company events that ended just before the drop are included in list_context_events and often explain it.
 - When the user names a store, city, or region, pass storeName or regionName on tools. Do not query company-wide.
+- When the user names a product/SKU, pass productName on tools.
 - When asked how stores did, call breakdown with dimension=store (not sku).
 - For search_news, omit from/to unless the user named dates. For list_context_events and metrics, pass from/to when they named a window.
 - Trust filled slots below for place/window/metric. If defaults were applied, name that place/window in the answer — do not silently diagnose a vague "why did sales drop?" company-wide.
@@ -42,7 +44,7 @@ ${metrics}
 - Page/default date window (use when slots say so): ${filters.from} to ${filters.to}.
 - "Last month" is ${month.from} to ${month.to}. Pass period="last_month" on tools — do not guess dates.
 - "Last quarter" is ${quarter.from} to ${quarter.to}. Pass period="last_quarter".
-- If scope is "This page", keep the page store/region filters. "All data" is company-wide unless the user names a store.
+- If scope is "This page", keep the page store/region/product filters. "All data" is company-wide unless the user names a store.
 ${slotsBlock}
 ${dimensions}`;
 }

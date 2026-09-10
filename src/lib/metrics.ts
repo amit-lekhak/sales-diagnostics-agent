@@ -7,18 +7,19 @@ export const METRIC_DEFS = {
     name: 'net_sales',
     label: 'Net sales',
     description:
-      'SUM(store_day_metrics.net_sales) in integer paise for paid retail orders, rolled up daily.',
+      'SUM(store_day_metrics.net_sales) in integer paise for paid retail orders, rolled up daily. When productId is set, sums order_items.line_total for that SKU instead.',
   },
   units: {
     name: 'units',
     label: 'Units',
-    description: 'SUM(store_day_metrics.units).',
+    description:
+      'SUM(store_day_metrics.units). When productId is set, SUM(order_items.qty) for that SKU.',
   },
   aov: {
     name: 'aov',
     label: 'Average order value',
     description:
-      'SUM(net_sales) / NULLIF(SUM(order_count), 0), rounded to integer paise.',
+      'SUM(net_sales) / NULLIF(SUM(order_count), 0), rounded to integer paise. With productId: product line sales / distinct paid orders containing that SKU.',
   },
 } as const;
 
@@ -39,7 +40,91 @@ function cityClause(filters: MetricFilters) {
   return filters.city ? sql`AND s.city ILIKE ${filters.city}` : sql``;
 }
 
+function orderStoreJoin(filters: MetricFilters) {
+  return needsStoreJoin(filters) ? sql`JOIN stores s ON s.id = o.store_id` : sql``;
+}
+
+function orderLocationFilters(filters: MetricFilters) {
+  const storeFilter =
+    filters.storeId != null ? sql`AND o.store_id = ${filters.storeId}` : sql``;
+  const regionFilter =
+    filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+  const cityFilter = cityClause(filters);
+  return { storeFilter, regionFilter, cityFilter };
+}
+
+/** Product-scoped metrics must come from order lines — store_day_metrics has no SKU. */
+async function getMetricFromOrders(name: MetricName, filters: MetricFilters) {
+  const { storeFilter, regionFilter, cityFilter } = orderLocationFilters(filters);
+  const storeJoin = orderStoreJoin(filters);
+  const productFilter = sql`AND oi.product_id = ${filters.productId!}`;
+
+  if (name === 'aov') {
+    const row = await sql<{ value: number | null }[]>`
+      SELECT COALESCE(
+        ROUND(
+          SUM(oi.line_total)::numeric
+          / NULLIF(COUNT(DISTINCT o.id), 0)
+        ),
+        0
+      )::bigint AS value
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      ${storeJoin}
+      WHERE o.status = 'paid'
+        AND o.paid_at::date >= ${filters.from}::date
+        AND o.paid_at::date <= ${filters.to}::date
+        ${productFilter}
+        ${storeFilter}
+        ${regionFilter}
+        ${cityFilter}
+    `;
+    const value = Math.round(Number(row[0]?.value ?? 0));
+    return {
+      metric: name,
+      ...METRIC_DEFS[name],
+      value,
+      unit: 'paise' as const,
+      display: money(value),
+      filters,
+    };
+  }
+
+  const expr =
+    name === 'net_sales'
+      ? sql`COALESCE(SUM(oi.line_total), 0)::bigint`
+      : sql`COALESCE(SUM(oi.qty), 0)::bigint`;
+
+  const row = await sql<{ value: number | null }[]>`
+    SELECT ${expr} AS value
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    ${storeJoin}
+    WHERE o.status = 'paid'
+      AND o.paid_at::date >= ${filters.from}::date
+      AND o.paid_at::date <= ${filters.to}::date
+      ${productFilter}
+      ${storeFilter}
+      ${regionFilter}
+      ${cityFilter}
+  `;
+
+  const value = Math.round(Number(row[0]?.value ?? 0));
+  return {
+    metric: name,
+    ...METRIC_DEFS[name],
+    value,
+    unit: name === 'units' ? ('count' as const) : ('paise' as const),
+    display: name === 'units' ? num(value) : money(value),
+    filters,
+  };
+}
+
 export async function getMetric(name: MetricName, filters: MetricFilters) {
+  if (filters.productId != null) {
+    return getMetricFromOrders(name, filters);
+  }
+
   const storeJoin = needsStoreJoin(filters)
     ? sql`JOIN stores s ON s.id = m.store_id`
     : sql``;
@@ -84,6 +169,37 @@ function asInt(n: number | string | bigint | null | undefined): number {
 }
 
 export async function seriesByDay(filters: MetricFilters) {
+  if (filters.productId != null) {
+    const { storeFilter, regionFilter, cityFilter } = orderLocationFilters(filters);
+    const storeJoin = orderStoreJoin(filters);
+    const rows = await sql<
+      { day: string; net_sales: number; units: number; order_count: number }[]
+    >`
+      SELECT o.paid_at::date::text AS day,
+             SUM(oi.line_total)::bigint AS net_sales,
+             SUM(oi.qty)::int AS units,
+             COUNT(DISTINCT o.id)::int AS order_count
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      ${storeJoin}
+      WHERE o.status = 'paid'
+        AND o.paid_at::date >= ${filters.from}::date
+        AND o.paid_at::date <= ${filters.to}::date
+        AND oi.product_id = ${filters.productId}
+        ${storeFilter}
+        ${regionFilter}
+        ${cityFilter}
+      GROUP BY o.paid_at::date
+      ORDER BY day
+    `;
+    return rows.map((r) => ({
+      ...r,
+      net_sales: asInt(r.net_sales),
+      units: asInt(r.units),
+      order_count: asInt(r.order_count),
+    }));
+  }
+
   const storeJoin = needsStoreJoin(filters)
     ? sql`JOIN stores s ON s.id = m.store_id`
     : sql``;
@@ -152,6 +268,66 @@ export async function breakdown(
         ${cityFilter}
         ${productFilter}
       GROUP BY p.id, p.name
+      ORDER BY net_sales DESC
+      LIMIT ${limit}
+    `;
+    return intMoneyRows(rows);
+  }
+
+  if (filters.productId != null) {
+    // Product-scoped store/region slices from order lines.
+    if (dimension === 'store') {
+      const storeFilter =
+        filters.storeId != null ? sql`AND o.store_id = ${filters.storeId}` : sql``;
+      const regionFilter =
+        filters.regionId != null ? sql`AND s.region_id = ${filters.regionId}` : sql``;
+      const cityFilter = cityClause(filters);
+      const rows = await sql<
+        { key: string; label: string; net_sales: number; units: number }[]
+      >`
+        SELECT s.id::text AS key, s.name AS label,
+               SUM(oi.line_total)::bigint AS net_sales,
+               SUM(oi.qty)::int AS units
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN stores s ON s.id = o.store_id
+        WHERE o.status = 'paid'
+          AND o.paid_at::date >= ${filters.from}::date
+          AND o.paid_at::date <= ${filters.to}::date
+          AND oi.product_id = ${filters.productId}
+          ${storeFilter}
+          ${regionFilter}
+          ${cityFilter}
+        GROUP BY s.id, s.name
+        ORDER BY net_sales DESC
+        LIMIT ${limit}
+      `;
+      return intMoneyRows(rows);
+    }
+
+    const storeFilter =
+      filters.storeId != null ? sql`AND o.store_id = ${filters.storeId}` : sql``;
+    const regionFilter =
+      filters.regionId != null ? sql`AND r.id = ${filters.regionId}` : sql``;
+    const cityFilter = cityClause(filters);
+    const rows = await sql<
+      { key: string; label: string; net_sales: number; units: number }[]
+    >`
+      SELECT r.id::text AS key, r.name AS label,
+             SUM(oi.line_total)::bigint AS net_sales,
+             SUM(oi.qty)::int AS units
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN stores s ON s.id = o.store_id
+      JOIN regions r ON r.id = s.region_id
+      WHERE o.status = 'paid'
+        AND o.paid_at::date >= ${filters.from}::date
+        AND o.paid_at::date <= ${filters.to}::date
+        AND oi.product_id = ${filters.productId}
+        ${storeFilter}
+        ${regionFilter}
+        ${cityFilter}
+      GROUP BY r.id, r.name
       ORDER BY net_sales DESC
       LIMIT ${limit}
     `;

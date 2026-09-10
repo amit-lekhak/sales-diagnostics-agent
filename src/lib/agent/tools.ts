@@ -8,7 +8,7 @@ import {
   type DateRange,
   type NamedPeriod,
 } from '../dates';
-import { resolvePlace } from '../dimensions';
+import { resolvePlace, resolveProduct } from '../dimensions';
 import { money } from '../format';
 import {
   breakdown,
@@ -29,6 +29,7 @@ export type FilterOverride = Partial<MetricFilters> & {
   period?: NamedPeriod;
   storeName?: string;
   regionName?: string;
+  productName?: string;
 };
 
 async function applyPage(
@@ -46,13 +47,17 @@ async function applyPage(
     storeName: override?.storeName,
     regionName: override?.regionName,
   });
+  const productId = await resolveProduct({
+    productId: override?.productId,
+    productName: override?.productName,
+  });
   if (rt.scope === 'all') {
     return {
       ...dates,
       storeId: place.storeId,
       regionId: place.regionId,
       city: place.city ?? override?.city,
-      productId: override?.productId,
+      productId,
     };
   }
   return {
@@ -61,7 +66,7 @@ async function applyPage(
     storeId: place.storeId ?? rt.filters.storeId,
     regionId: place.regionId ?? rt.filters.regionId,
     city: place.city ?? override?.city ?? rt.filters.city,
-    productId: override?.productId ?? rt.filters.productId,
+    productId: productId ?? rt.filters.productId,
   };
 }
 
@@ -70,6 +75,8 @@ export type LocationArgs = {
   regionId?: number;
   storeName?: string;
   regionName?: string;
+  productId?: number;
+  productName?: string;
 };
 
 export type ToolFailure = { ok: false; error: string };
@@ -252,12 +259,34 @@ export async function listContextEvents(
 ) {
   const filters = await applyPage(rt, args);
   return traced(rt, 'list_context_events', args, async () => {
-    const storeFilter =
+    // Resolve region from store/city when caller only passed those.
+    let regionId = filters.regionId;
+    if (regionId == null && filters.storeId != null) {
+      const rows = await sql<{ region_id: number }[]>`
+        SELECT region_id FROM stores WHERE id = ${filters.storeId} LIMIT 1
+      `;
+      regionId = rows[0]?.region_id;
+    } else if (regionId == null && filters.city) {
+      const rows = await sql<{ region_id: number }[]>`
+        SELECT DISTINCT region_id FROM stores WHERE city ILIKE ${filters.city} LIMIT 2
+      `;
+      if (rows.length === 1) regionId = rows[0]!.region_id;
+    }
+
+    const eventScope =
       filters.storeId != null
         ? sql`AND (e.store_id IS NULL OR e.store_id = ${filters.storeId})`
         : filters.city
           ? sql`AND (e.store_id IS NULL OR s.city ILIKE ${filters.city})`
-          : sql``;
+          : regionId != null
+            ? sql`AND (e.store_id IS NULL OR s.region_id = ${regionId})`
+            : sql``;
+
+    const holidayScope =
+      regionId != null
+        ? sql`AND (h.region_id IS NULL OR h.region_id = ${regionId})`
+        : sql``;
+
     const prior = priorPeriod(filters);
     const eventWindowFrom = prior.from < filters.from ? prior.from : filters.from;
     const events = await sql<
@@ -273,7 +302,7 @@ export async function listContextEvents(
       FROM company_events e
       LEFT JOIN stores s ON s.id = e.store_id
       WHERE e.starts_on <= ${filters.to}::date AND e.ends_on >= ${eventWindowFrom}::date
-      ${storeFilter}
+      ${eventScope}
       ORDER BY e.starts_on
     `;
     const holidays = await sql<{ date: string; name: string; region: string | null }[]>`
@@ -281,12 +310,41 @@ export async function listContextEvents(
       FROM holidays h
       LEFT JOIN regions r ON r.id = h.region_id
       WHERE h.date BETWEEN ${filters.from}::date AND ${filters.to}::date
+      ${holidayScope}
+    `;
+    const promoRegionFilter =
+      regionId != null
+        ? sql`AND (p.region_id IS NULL OR p.region_id = ${regionId})`
+        : sql``;
+    const promoProductFilter =
+      filters.productId != null
+        ? sql`AND (p.product_id IS NULL OR p.product_id = ${filters.productId})`
+        : sql``;
+    const promotions = await sql<
+      {
+        name: string;
+        starts_on: string;
+        ends_on: string;
+        region: string | null;
+        product: string | null;
+      }[]
+    >`
+      SELECT p.name, p.starts_on::text, p.ends_on::text,
+             r.name AS region, pr.name AS product
+      FROM promotions p
+      LEFT JOIN regions r ON r.id = p.region_id
+      LEFT JOIN products pr ON pr.id = p.product_id
+      WHERE p.starts_on <= ${filters.to}::date
+        AND p.ends_on >= ${eventWindowFrom}::date
+        ${promoRegionFilter}
+        ${promoProductFilter}
+      ORDER BY p.starts_on
     `;
     const weatherJoin =
       filters.storeId != null
         ? sql`AND w.store_id = ${filters.storeId}`
-        : filters.regionId != null
-          ? sql`AND s.region_id = ${filters.regionId}`
+        : regionId != null
+          ? sql`AND s.region_id = ${regionId}`
           : filters.city
             ? sql`AND s.city ILIKE ${filters.city}`
             : sql``;
@@ -308,6 +366,7 @@ export async function listContextEvents(
       filters,
       holidays,
       company_events: events,
+      promotions,
       weather_by_store: weather,
       interpretation:
         'Overlap is a correlation. Do not claim weather or news caused a sales move unless a company_event also matches. Events that ended just before this window (for example a promo) are included because they can explain a drop after the end date.',

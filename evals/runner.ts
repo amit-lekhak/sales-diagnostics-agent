@@ -3,10 +3,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from '../src/lib/db';
-import {
-  classifyProviderError,
-  isRateLimitCode,
-} from '../src/lib/agent/provider-errors';
+import { ensureGeminiKey } from '../src/lib/agent/provider-config';
+import { classifyProviderError, isRateLimitCode } from '../src/lib/agent/provider-errors';
 import { runAgent } from './agent';
 import { EVAL_CASES, type EvalCase, type EvalType, type Scenario } from './cases';
 import { assertSeeded, loadCatalog, resolvePage } from './catalog';
@@ -15,9 +13,7 @@ import { scoreAgent, scoreOracle, type AgentScore, type Check } from './score';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-}
+ensureGeminiKey();
 
 type Flags = {
   type?: EvalType;
@@ -112,6 +108,7 @@ async function runAgentWithRateLimitRetry(input: {
   question: string;
   scope: EvalCase['scope'];
   page: Awaited<ReturnType<typeof resolvePage>>;
+  recentTurns?: { role: string; content: string }[];
 }) {
   let agent = await runAgent(input);
   if (agent.error) {
@@ -168,6 +165,7 @@ async function main() {
         question: cse.question,
         scope: cse.scope,
         page,
+        recentTurns: cse.recentTurns,
       });
       latency = agent.latencyMs;
       const scored = scoreAgent(cse, oracle, agent.text, agent.tools);

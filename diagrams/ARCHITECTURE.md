@@ -59,6 +59,8 @@ flowchart TD
 
   Loop --> tools
   tools --> PG[(Postgres semantic layer)]
+  T1 -->|"productId via order_items"| PG
+  T5 --> Promo[promotions and region-scoped holidays]
   T6 --> Emb[Embeddings pgvector]
   Emb --> PG
 

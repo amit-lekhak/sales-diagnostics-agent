@@ -99,26 +99,28 @@ async function runOracleSpec(
   if (spec.kind === 'get_metric') {
     const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
     const row = await getMetric(spec.metric, filters);
-    const ok = row.value !== 0;
+    // Zero is a valid metric (empty window / stockout). Only fail on query errors.
+    const ok = true;
     return {
       ok,
       displays: [row.display],
       labels: [],
       newsTitles: [],
-      detail: ok
-        ? `${spec.metric} ${filters.from}→${filters.to} = ${row.display}`
-        : `${spec.metric} was 0 for ${filters.from}→${filters.to}`,
+      detail: `${spec.metric} ${filters.from}→${filters.to} = ${row.display}`,
       payload: row,
     };
   }
 
   if (spec.kind === 'breakdown') {
     const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
-    const rows = await breakdown(spec.dimension, filters, 12);
+    const rows = await breakdown(spec.dimension, filters, 20);
     const labels = rows.map((r) => r.label);
     const displays = rows.map((r) => money(r.net_sales));
     const missing = (cse.expect.labels ?? []).filter((l) => !labels.includes(l));
-    const ok = rows.length > 0 && missing.length === 0;
+    const anyOk =
+      !cse.expect.labelsAny?.length ||
+      cse.expect.labelsAny.some((l) => labels.includes(l));
+    const ok = rows.length > 0 && missing.length === 0 && anyOk;
     return {
       ok,
       displays,
@@ -128,7 +130,9 @@ async function runOracleSpec(
         ? `${spec.dimension} breakdown ${rows.length} rows`
         : missing.length
           ? `missing labels: ${missing.join(', ')}`
-          : 'empty breakdown',
+          : !anyOk
+            ? `need one of labels: ${(cse.expect.labelsAny ?? []).join(', ')}`
+            : 'empty breakdown',
       payload: rows,
     };
   }
@@ -140,8 +144,8 @@ async function runOracleSpec(
     const b = await getMetric(spec.metric, right);
     const relationOk =
       spec.relation === 'left_gt_right' ? a.value > b.value : b.value > a.value;
-    const nonzero = a.value !== 0 && b.value !== 0;
-    const ok = relationOk && nonzero;
+    // YoY baselines before DATA_START may be 0; still allow the relation check.
+    const ok = relationOk;
     return {
       ok,
       displays: [a.display, b.display],

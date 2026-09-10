@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText, stepCountIs } from 'ai';
 import { buildAiTools } from '../src/lib/agent/ai-tools';
 import { systemPrompt } from '../src/lib/agent/prompts';
+import { ensureGeminiKey } from '../src/lib/agent/provider-config';
 import { classifyProviderError } from '../src/lib/agent/provider-errors';
 import { fillSlots } from '../src/lib/agent/slot-fill';
 import { classifyTopic, SCOPE_REFUSAL_TEXT } from '../src/lib/agent/topic-guard';
@@ -34,10 +35,9 @@ export async function runAgent(input: {
   question: string;
   scope: ChatScope;
   page: PageContext;
+  recentTurns?: { role: string; content: string }[];
 }): Promise<AgentRunResult> {
-  if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-  }
+  ensureGeminiKey();
   const range = {
     from: input.page.from ?? defaultRange().from,
     to: input.page.to ?? defaultRange().to,
@@ -83,10 +83,11 @@ export async function runAgent(input: {
       };
     }
 
+    const recentTurns = input.recentTurns ?? [];
     const slotsResult = await fillSlots({
       message: input.question,
       runId,
-      recentTurns: [],
+      recentTurns,
       scope: input.scope,
       page: input.page,
       defaultFrom: range.from,
@@ -123,10 +124,14 @@ export async function runAgent(input: {
     const filledSlots = slotsResult.action === 'ready' ? slotsResult.slots : null;
 
     const dimensions = formatDimensionsPrompt(await loadDimensions());
+    const historyMessages = recentTurns.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
     const result = await generateText({
       model: google(MODEL),
       system: systemPrompt(input.scope, input.page, range, dimensions, filledSlots),
-      messages: [{ role: 'user', content: input.question }],
+      messages: [...historyMessages, { role: 'user', content: input.question }],
       stopWhen: stepCountIs(8),
       tools: buildAiTools(rt),
       abortSignal: AbortSignal.timeout(AGENT_TIMEOUT_MS),

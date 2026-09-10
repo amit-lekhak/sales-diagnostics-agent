@@ -21,6 +21,13 @@ const locationFields = {
       'Store or city name (e.g. "Pune Koregaon", "Pune", "Mumbai", "Delhi"). Prefer this over guessing IDs.',
     ),
   regionName: z.string().optional().describe('Region name: West, North, South, or East.'),
+  productId: z.number().optional(),
+  productName: z
+    .string()
+    .optional()
+    .describe(
+      'Product or SKU name (e.g. "ShieldGuard Soap"). Prefer this over guessing IDs.',
+    ),
 };
 
 export function buildAiTools(rt: ToolRuntime) {
@@ -28,7 +35,7 @@ export function buildAiTools(rt: ToolRuntime) {
   return {
     get_metric: tool({
       description:
-        'Return a named metric for a date range. Uses the semantic layer, never raw SQL from the model. Pass period last_month or last_quarter instead of guessing dates. When the user names a store, city, or region, pass storeName or regionName.',
+        'Return a named metric for a date range. Uses the semantic layer, never raw SQL from the model. Pass period last_month or last_quarter instead of guessing dates. When the user names a store, city, region, or product, pass storeName/regionName/productName.',
       inputSchema: z.object({
         metric: metricEnum,
         period: periodEnum,
@@ -51,13 +58,15 @@ export function buildAiTools(rt: ToolRuntime) {
         regionId: locationFields.regionId,
         storeName: locationFields.storeName,
         regionName: locationFields.regionName,
+        productId: locationFields.productId,
+        productName: locationFields.productName,
         limit: z.number().optional(),
       }),
       execute: async (args) => mt.breakdown(args),
     }),
     compare_periods: tool({
       description:
-        'Compare a metric to the prior window of equal length, or year-over-year. Pass storeName/regionName when the user names a place.',
+        'Compare a metric to the prior window of equal length, or year-over-year. Pass storeName/regionName/productName when the user names a place or product.',
       inputSchema: z.object({
         metric: metricEnum,
         period: periodEnum,
@@ -71,7 +80,7 @@ export function buildAiTools(rt: ToolRuntime) {
     }),
     explain_change: tool({
       description:
-        'Decompose a net-sales change vs the prior period by store/region/SKU. Includes unexplained remainder. Pass storeName for a city or store.',
+        'Decompose a net-sales change vs the prior period by store/region/SKU. Includes unexplained remainder. Pass storeName for a city or store; productName for a SKU.',
       inputSchema: z.object({
         period: periodEnum,
         from: z.string().optional(),
@@ -83,7 +92,7 @@ export function buildAiTools(rt: ToolRuntime) {
     }),
     list_context_events: tool({
       description:
-        'Holidays, stored weather, and company events overlapping a date window. Correlation, not causation. Pass from/to for the dates the user asked about — do not use the page default if they named another period.',
+        'Holidays, promotions, stored weather, and company events overlapping a date window. Correlation, not causation. Pass from/to for the dates the user asked about — do not use the page default if they named another period.',
       inputSchema: z.object({
         period: periodEnum,
         from: z.string().optional(),

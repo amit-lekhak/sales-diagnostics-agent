@@ -58,6 +58,8 @@ export function ChatWidget() {
   const [summaryNote, setSummaryNote] = useState<string | null>(null);
   const [retryUntil, setRetryUntil] = useState<number | null>(null);
   const [retryLeftSec, setRetryLeftSec] = useState(0);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [streamRunId, setStreamRunId] = useState<string | null>(null);
   const retryTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const chip = useMemo(() => describePageContext(page, scope), [page, scope]);
@@ -149,8 +151,11 @@ export function ChatWidget() {
     if (!text || busy || retryBlocked) return;
     setInput('');
     setBusy(true);
+    setToolStatus(null);
+    setStreamRunId(null);
     setMessages((m) => [...m, { role: 'user', content: text }]);
     let assistant = '';
+    let activeRunId: string | null = runId;
     setMessages((m) => [...m, { role: 'assistant', content: '' }]);
     try {
       const res = await fetch('/api/chat', {
@@ -174,7 +179,10 @@ export function ChatWidget() {
           runId?: string;
         };
         if (json.conversationId) setConversationId(json.conversationId);
-        if (json.runId) setRunId(json.runId);
+        if (json.runId) {
+          setRunId(json.runId);
+          activeRunId = json.runId;
+        }
         applyRetryAfter(json.retryAfterMs);
         assistant = json.text ?? json.error ?? 'Request failed.';
         setMessages((m) => {
@@ -213,10 +221,26 @@ export function ChatWidget() {
           const ev = parsed.data;
           if (ev.type === 'meta' || ev.type === 'done') {
             if (ev.conversationId) setConversationId(ev.conversationId);
-            if (ev.runId) setRunId(ev.runId);
+            if (ev.runId) {
+              setRunId(ev.runId);
+              setStreamRunId(ev.runId);
+              activeRunId = ev.runId;
+            }
+          }
+          if (ev.type === 'tool') {
+            if (ev.runId) {
+              setRunId(ev.runId);
+              activeRunId = ev.runId;
+            }
+            setToolStatus(
+              ev.phase === 'start' ? `Running ${ev.name}…` : `Finished ${ev.name}`,
+            );
           }
           if (ev.type === 'delta' && ev.text) {
-            if (ev.runId) setRunId(ev.runId);
+            if (ev.runId) {
+              setRunId(ev.runId);
+              activeRunId = ev.runId;
+            }
             if (ev.conversationId) setConversationId(ev.conversationId);
             assistant += ev.text;
             setMessages((m) => {
@@ -224,14 +248,17 @@ export function ChatWidget() {
               copy[copy.length - 1] = {
                 role: 'assistant',
                 content: assistant,
-                runId: ev.runId ?? runId,
+                runId: activeRunId,
               };
               return copy;
             });
           }
           if (ev.type === 'error') {
             if (ev.conversationId) setConversationId(ev.conversationId);
-            if (ev.runId) setRunId(ev.runId);
+            if (ev.runId) {
+              setRunId(ev.runId);
+              activeRunId = ev.runId;
+            }
             applyRetryAfter(ev.retryAfterMs);
             assistant = ev.error ?? 'Error';
             setMessages((m) => {
@@ -239,15 +266,17 @@ export function ChatWidget() {
               copy[copy.length - 1] = {
                 role: 'assistant',
                 content: assistant,
-                runId: ev.runId ?? runId,
+                runId: activeRunId,
               };
               return copy;
             });
           }
         }
       }
+      setToolStatus(null);
       await loadThreads();
     } catch (err) {
+      setToolStatus(null);
       setMessages((m) => {
         const copy = [...m];
         copy[copy.length - 1] = {
@@ -267,6 +296,16 @@ export function ChatWidget() {
       .then((r) => r.json())
       .then((j: { spans: Span[] }) => setSpans(j.spans ?? []));
   }, [runId, showTrace]);
+
+  // Prefetch citations for the latest completed run so they can show inline.
+  useEffect(() => {
+    if (!streamRunId || busy) return;
+    void fetch(`/api/traces/${streamRunId}`)
+      .then((r) => r.json())
+      .then((j: { spans: Span[] }) => {
+        if (!showTrace) setSpans(j.spans ?? []);
+      });
+  }, [streamRunId, busy, showTrace]);
 
   if (!open) {
     return (
@@ -375,6 +414,11 @@ export function ChatWidget() {
           Rate limited — you can send again in {retryLeftSec}s.
         </p>
       )}
+      {busy && toolStatus && (
+        <p className="border-b border-(--line) px-3 py-1 text-[11px] text-teal-800">
+          {toolStatus}
+        </p>
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {messages.length === 0 && (
           <div className="space-y-2 text-(--muted)">
@@ -395,13 +439,25 @@ export function ChatWidget() {
         )}
         {messages.map((m, i) => (
           <div
-            key={i}
+            key={m.id ?? `${m.role}-${i}-${m.content.slice(0, 24)}`}
             className={clsx(
               'rounded-lg px-3 py-2 whitespace-pre-wrap',
               m.role === 'user' ? 'ml-6 bg-stone-200' : 'mr-4 bg-teal-50',
             )}
           >
             {m.content || (busy && i === messages.length - 1 ? <TypingDots /> : '')}
+            {m.role === 'assistant' &&
+              m.runId &&
+              m.runId === (streamRunId ?? runId) &&
+              citations.length > 0 &&
+              !busy && (
+                <div className="mt-2 border-t border-teal-100 pt-2 text-[11px] text-teal-900">
+                  <p className="mb-1 font-medium">Sources</p>
+                  {citations.slice(0, 4).map((c) => (
+                    <p key={c}>• {c}</p>
+                  ))}
+                </div>
+              )}
           </div>
         ))}
       </div>

@@ -8,14 +8,28 @@ export type DimensionRow = {
   region: string;
 };
 
+const DIMENSIONS_TTL_MS = 60_000;
+let dimensionsCache: { at: number; rows: DimensionRow[] } | null = null;
+
 export async function loadDimensions(): Promise<DimensionRow[]> {
-  return sql<DimensionRow[]>`
+  const now = Date.now();
+  if (dimensionsCache && now - dimensionsCache.at < DIMENSIONS_TTL_MS) {
+    return dimensionsCache.rows;
+  }
+  const rows = await sql<DimensionRow[]>`
     SELECT s.id AS "storeId", s.name AS store, s.city,
            r.id AS "regionId", r.name AS region
     FROM stores s
     JOIN regions r ON r.id = s.region_id
     ORDER BY r.id, s.id
   `;
+  dimensionsCache = { at: now, rows };
+  return rows;
+}
+
+/** Test helper — clear the in-memory dimensions cache. */
+export function clearDimensionsCache() {
+  dimensionsCache = null;
 }
 
 export function formatDimensionsPrompt(rows: DimensionRow[]): string {
@@ -83,4 +97,25 @@ export async function resolvePlace(input: {
     out.storeId = undefined;
   }
   return out;
+}
+
+export async function resolveProduct(input: {
+  productId?: number;
+  productName?: string;
+}): Promise<number | undefined> {
+  if (input.productId != null) return input.productId;
+  const raw = input.productName?.trim();
+  if (!raw) return undefined;
+  const exact = await sql<{ id: number }[]>`
+    SELECT id FROM products WHERE name ILIKE ${raw} LIMIT 1
+  `;
+  if (exact[0]) return exact[0].id;
+  const byName = await sql<{ id: number }[]>`
+    SELECT id FROM products WHERE name ILIKE ${'%' + raw + '%'} LIMIT 2
+  `;
+  if (byName.length === 1) return byName[0]!.id;
+  const bySku = await sql<{ id: number }[]>`
+    SELECT id FROM products WHERE sku ILIKE ${raw} LIMIT 1
+  `;
+  return bySku[0]?.id;
 }

@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { ChatScope, PageContext } from '../page-context';
+import { ensureGeminiKey } from './provider-config';
 import {
   classifyProviderError,
   isFailOpenCode,
@@ -10,7 +11,7 @@ import {
 import { addSpan } from './tracer';
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
-const SLOT_TIMEOUT_MS = Number(process.env.SLOT_FILL_TIMEOUT_MS ?? 15_000);
+const SLOT_TIMEOUT_MS = Number(process.env.SLOT_FILL_TIMEOUT_MS ?? 8_000);
 
 const rawSlotSchema = z.object({
   intent: z.enum(['kpi', 'breakdown', 'compare', 'diagnose', 'context', 'other']),
@@ -72,10 +73,14 @@ reason: short.
 Inherit place/window from recent turns when the current message is a short follow-up.`;
 
 function pageHasPlace(scope: ChatScope, page: PageContext): boolean {
-  return scope === 'page' && (page.storeId != null || page.regionId != null);
+  return (
+    scope === 'page' &&
+    (page.storeId != null || page.regionId != null || page.productId != null)
+  );
 }
 
-function applyDeterministicRules(input: {
+/** Exported for unit tests and fail-open heuristic. */
+export function applyDeterministicRules(input: {
   raw: z.infer<typeof rawSlotSchema>;
   scope: ChatScope;
   page: PageContext;
@@ -94,7 +99,9 @@ function applyDeterministicRules(input: {
     place =
       page.storeId != null
         ? `page store #${page.storeId}`
-        : `page region #${page.regionId}`;
+        : page.regionId != null
+          ? `page region #${page.regionId}`
+          : `page product #${page.productId}`;
     placeSource = 'page';
     defaultsApplied.push(`place from page filter (${place})`);
   }
@@ -167,6 +174,29 @@ function applyDeterministicRules(input: {
   };
 }
 
+const DIAGNOSE_COMPARE_RE =
+  /\b(why|drop|dropped|spike|spiked|decline|declined|fell|down|compare|vs\.?|versus|diagnos)/i;
+const PLACE_HINT_RE =
+  /\b(mumbai|delhi|pune|bangalore|chennai|west|north|south|east|andheri|koregaon|store|region|city)\b/i;
+const WINDOW_HINT_RE =
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|202[4-9]|last\s+month|last\s+quarter|this\s+month|yesterday|week)\b/i;
+
+/**
+ * When the slot LLM fail-opens, still clarify vague diagnose/compare asks that
+ * lack place, window, and page filters — matching applyDeterministicRules intent.
+ */
+export function clarifyOnFailOpen(input: {
+  message: string;
+  scope: ChatScope;
+  page: PageContext;
+}): { action: 'clarify'; text: string } | null {
+  if (pageHasPlace(input.scope, input.page)) return null;
+  const msg = input.message.trim();
+  if (!DIAGNOSE_COMPARE_RE.test(msg)) return null;
+  if (PLACE_HINT_RE.test(msg) || WINDOW_HINT_RE.test(msg)) return null;
+  return { action: 'clarify', text: CLARIFY_PLACE_WINDOW_TEXT };
+}
+
 export async function fillSlots(input: {
   message: string;
   runId: string;
@@ -177,9 +207,7 @@ export async function fillSlots(input: {
   defaultTo: string;
 }): Promise<SlotFillResult> {
   const startedAt = new Date();
-  if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-  }
+  ensureGeminiKey();
 
   const historyBlock =
     input.recentTurns && input.recentTurns.length
@@ -222,6 +250,42 @@ export async function fillSlots(input: {
   } catch (err) {
     const classified = classifyProviderError(err);
     if (isFailOpenCode(classified.code)) {
+      const clarify = clarifyOnFailOpen({
+        message: input.message,
+        scope: input.scope,
+        page: input.page,
+      });
+      if (clarify) {
+        await addSpan({
+          runId: input.runId,
+          kind: 'guard',
+          name: 'slot_filler',
+          startedAt,
+          endedAt: new Date(),
+          payloadIn: { message: input.message },
+          payloadOut: {
+            action: 'clarify',
+            failedOpen: true,
+            heuristic: true,
+            code: classified.code,
+          },
+          error: classified.raw,
+        });
+        return {
+          action: 'clarify',
+          text: clarify.text,
+          slots: {
+            intent: 'diagnose',
+            place: null,
+            window: null,
+            metric: null,
+            placeSource: null,
+            windowSource: null,
+            defaultsApplied: [],
+            reason: 'fail_open_heuristic_clarify',
+          },
+        };
+      }
       await addSpan({
         runId: input.runId,
         kind: 'guard',
