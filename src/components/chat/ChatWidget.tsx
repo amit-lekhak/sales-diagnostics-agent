@@ -7,7 +7,7 @@ import { sseEventSchema } from '@/lib/agent/chat-protocol';
 import { describePageContext, type ChatScope } from '@/lib/page-context';
 import { usePageContext } from './PageContextProvider';
 
-const DEMO_QUESTIONS = [
+const SUGGESTED_QUESTIONS = [
   'What were net sales last month?',
   'How did this store do last quarter?',
   'Why did sales drop in July 2026 in Mumbai?',
@@ -422,9 +422,9 @@ export function ChatWidget() {
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {messages.length === 0 && (
           <div className="space-y-2 text-(--muted)">
-            <p>Demo questions (numbers come from SQL tools, not the model):</p>
+            <p>Suggested questions:</p>
             <div className="flex flex-wrap gap-1">
-              {DEMO_QUESTIONS.map((q) => (
+              {SUGGESTED_QUESTIONS.map((q) => (
                 <button
                   key={q}
                   type="button"

@@ -1,24 +1,16 @@
 # Northstar Mart — sales diagnostics agent
 
-Learning app: a fake retailer dashboard plus a Gemini chat that answers **only from Postgres tools**. Weather and news are ingested, then queried. The model does not invent sales figures.
+Retail analytics dashboard with a Gemini chat that answers **only from Postgres-backed tools**. Weather and news are ingested, then queried — the model does not invent sales figures.
 
 ## Prerequisites
 
 - Node 20+ and pnpm
-- Local Postgres (no Docker). This repo was developed against Postgres 14.
-- `pgvector` extension (`CREATE EXTENSION vector;`)
+- Postgres 14+ with the `pgvector` extension (`CREATE EXTENSION vector;`)
 - Optional: Google AI Studio key, OpenWeather key, OpenRouter key
 
-### pgvector on Homebrew Postgres 14
+### pgvector setup
 
-If `SELECT * FROM pg_available_extensions WHERE name = 'vector'` is empty, build pgvector against **the same** `pg_config` as the running server (not libpq 17):
-
-```bash
-git clone --depth 1 --branch v0.8.1 https://github.com/pgvector/pgvector.git /tmp/pgvector
-# If clang complains about a missing MacOSX14.sdk, wrap clang so it uses the current Xcode SDK.
-make PG_CONFIG=/opt/homebrew/opt/postgresql@14/bin/pg_config
-make install PG_CONFIG=/opt/homebrew/opt/postgresql@14/bin/pg_config
-```
+If `SELECT * FROM pg_available_extensions WHERE name = 'vector'` is empty, install pgvector against the same `pg_config` as your running server, then:
 
 ```bash
 createdb northstar
@@ -40,22 +32,22 @@ pnpm dev
 
 Open http://localhost:3000
 
-Vercel: deploy this folder as the Next.js root. Point `DATABASE_URL` at hosted Postgres **with pgvector** (Neon or Supabase). Do not use Docker.
+Deploy this folder as the Next.js root (e.g. Vercel). Point `DATABASE_URL` at hosted Postgres **with pgvector** (Neon or Supabase).
 
-## Demo questions
+## Example questions
 
-1. Overview, default dates: **What were net sales last month?** — must match the Overview KPI for that window (ask with explicit August 2026 dates if the model is vague).
-2. On `/stores?regionId=1` with **This page**: **How did West stores do in July 2026?**
-3. **Why did sales drop in July 2026 in Mumbai?** — expect a store breakdown, rain overlap, ShieldGuard stockout, and an unexplained remainder. Not “rain caused it.”
+1. Overview: **What were net sales last month?**
+2. On `/stores?regionId=1` with page scope: **How did West stores do in July 2026?**
+3. **Why did sales drop in July 2026 in Mumbai?** — store breakdown, rain overlap, ShieldGuard stockout, and an unexplained remainder.
 
-Schema SQL lives in `drizzle/0000_init.sql`. Day-to-day local setup still uses `pnpm db:push`.
+Schema SQL lives in `drizzle/0000_init.sql`. Day-to-day setup uses `pnpm db:push`.
 
 ## Scripts
 
-- `pnpm db:seed` / `pnpm db:reset` — wipe and reload planted stories
+- `pnpm db:seed` / `pnpm db:reset` — wipe and reload seed data
 - `pnpm weather:sync` — OpenWeather current + 5-day forecast upserted into `weather_daily`
 - `pnpm eval` — golden SQL + semantic evals (oracle layer, then Gemini agent). `--skip-agent`, `--type sql|semantic`, `--scenario mumbai_july`, `--id sql-net-sales-last-month`
-- `pnpm lint` / `pnpm format` — ESLint check; Prettier rewrite (not on save)
+- `pnpm lint` / `pnpm format` — ESLint check; Prettier rewrite
 - `pnpm test` — unit tests (provider errors, slot rules, dates, optional DB metrics)
 
 ## Evals
@@ -75,15 +67,7 @@ Unit tests (no Gemini required for most):
 pnpm test
 ```
 
-## Local demo only
-
-`/api/chat`, `/api/traces`, and conversation APIs are unauthenticated. Treat this as a local learning app — do not expose a public deployment without auth and rate limits.
-
-## Format vs agent edits
-
-Workspace `.vscode/settings.json` turns **format on save** and **ESLint fix on save** off so Cmd+S does not rewrite agent edits. Format only with `pnpm format` or Format Document.
-
-## Planted stories in seed data
+## Seed scenarios
 
 - Mumbai July 2026: heavy rain + ShieldGuard stockout at Andheri
 - Delhi late Oct 2025: Diwali spike
