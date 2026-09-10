@@ -2,6 +2,8 @@
 
 Gemini analyst via the Vercel AI SDK tool loop (max 8 steps), with a pre-analyst Gemini topic classifier (allow/refuse) and a structured slot filler (clarify / soft-refuse / ready). Both gates fail-open on error. No multi-agent handoffs and no human-approval gate; guardrails are the topic gate, slot filler, prompt rules, Zod tool schemas, and offline eval scorers.
 
+Docs: [tutorial](../docs/tutorial-getting-started.md) · [runtime reference](../docs/reference-runtime.md) · [design decisions](../docs/explanation-design-decisions.md) · [docs index](../docs/README.md)
+
 ## 1. Runtime workflow
 
 ```mermaid

@@ -2,6 +2,14 @@
 
 Retail analytics dashboard with a Gemini chat that answers **only from Postgres-backed tools**. Weather and news are ingested, then queried — the model does not invent sales figures.
 
+## Documentation
+
+| Doc                                                 | For                                              |
+| --------------------------------------------------- | ------------------------------------------------ |
+| [docs/](docs/README.md)                             | Tutorial, how-tos, reference, design explanation |
+| [Getting started](docs/tutorial-getting-started.md) | Install → seed → first chat answer               |
+| [Architecture](diagrams/ARCHITECTURE.md)            | Runtime and evals diagrams                       |
+
 ## Prerequisites
 
 - Node 20+ and pnpm
