@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { citationsFromSpans } from '@/lib/agent/citations';
+import { sseEventSchema } from '@/lib/agent/chat-protocol';
 import { describePageContext, type ChatScope } from '@/lib/page-context';
 import { usePageContext } from './PageContextProvider';
 
@@ -55,10 +56,14 @@ export function ChatWidget() {
   const [spans, setSpans] = useState<Span[]>([]);
   const [showTrace, setShowTrace] = useState(false);
   const [summaryNote, setSummaryNote] = useState<string | null>(null);
+  const [retryUntil, setRetryUntil] = useState<number | null>(null);
+  const [retryLeftSec, setRetryLeftSec] = useState(0);
+  const retryTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const chip = useMemo(() => describePageContext(page, scope), [page, scope]);
   const citations = useMemo(() => citationsFromSpans(spans), [spans]);
   const visibleThreads = threads.slice(0, 3);
+  const retryBlocked = retryUntil != null && Date.now() < retryUntil;
 
   const loadThreads = useCallback(async () => {
     const res = await fetch('/api/conversations');
@@ -70,6 +75,32 @@ export function ChatWidget() {
   useEffect(() => {
     void loadThreads();
   }, [loadThreads]);
+
+  useEffect(() => {
+    if (retryTimer.current) {
+      clearInterval(retryTimer.current);
+      retryTimer.current = null;
+    }
+    if (retryUntil == null) {
+      setRetryLeftSec(0);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000));
+      setRetryLeftSec(left);
+      if (left <= 0) setRetryUntil(null);
+    };
+    tick();
+    retryTimer.current = setInterval(tick, 500);
+    return () => {
+      if (retryTimer.current) clearInterval(retryTimer.current);
+    };
+  }, [retryUntil]);
+
+  function applyRetryAfter(ms: number | null | undefined) {
+    if (ms == null || ms <= 0) return;
+    setRetryUntil(Date.now() + ms);
+  }
 
   function resetComposer() {
     setConversationId(null);
@@ -115,7 +146,7 @@ export function ChatWidget() {
 
   async function send() {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || retryBlocked) return;
     setInput('');
     setBusy(true);
     setMessages((m) => [...m, { role: 'user', content: text }]);
@@ -137,11 +168,14 @@ export function ChatWidget() {
         const json = (await res.json()) as {
           text?: string;
           error?: string;
+          code?: string;
+          retryAfterMs?: number | null;
           conversationId?: string;
           runId?: string;
         };
         if (json.conversationId) setConversationId(json.conversationId);
         if (json.runId) setRunId(json.runId);
+        applyRetryAfter(json.retryAfterMs);
         assistant = json.text ?? json.error ?? 'Request failed.';
         setMessages((m) => {
           const copy = [...m];
@@ -168,32 +202,45 @@ export function ChatWidget() {
         for (const part of parts) {
           const line = part.replace(/^data: /, '').trim();
           if (!line) continue;
-          const ev = JSON.parse(line) as {
-            type: string;
-            text?: string;
-            conversationId?: string;
-            runId?: string;
-            error?: string;
-          };
-          if (ev.conversationId) setConversationId(ev.conversationId);
-          if (ev.runId) setRunId(ev.runId);
+          let raw: unknown;
+          try {
+            raw = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          const parsed = sseEventSchema.safeParse(raw);
+          if (!parsed.success) continue;
+          const ev = parsed.data;
+          if (ev.type === 'meta' || ev.type === 'done') {
+            if (ev.conversationId) setConversationId(ev.conversationId);
+            if (ev.runId) setRunId(ev.runId);
+          }
           if (ev.type === 'delta' && ev.text) {
+            if (ev.runId) setRunId(ev.runId);
+            if (ev.conversationId) setConversationId(ev.conversationId);
             assistant += ev.text;
             setMessages((m) => {
               const copy = [...m];
               copy[copy.length - 1] = {
                 role: 'assistant',
                 content: assistant,
-                runId: ev.runId,
+                runId: ev.runId ?? runId,
               };
               return copy;
             });
           }
           if (ev.type === 'error') {
+            if (ev.conversationId) setConversationId(ev.conversationId);
+            if (ev.runId) setRunId(ev.runId);
+            applyRetryAfter(ev.retryAfterMs);
             assistant = ev.error ?? 'Error';
             setMessages((m) => {
               const copy = [...m];
-              copy[copy.length - 1] = { role: 'assistant', content: assistant };
+              copy[copy.length - 1] = {
+                role: 'assistant',
+                content: assistant,
+                runId: ev.runId ?? runId,
+              };
               return copy;
             });
           }
@@ -323,6 +370,11 @@ export function ChatWidget() {
           {summaryNote}
         </p>
       )}
+      {retryBlocked && (
+        <p className="border-b border-(--line) px-3 py-1 text-[11px] text-orange-800">
+          Rate limited — you can send again in {retryLeftSec}s.
+        </p>
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {messages.length === 0 && (
           <div className="space-y-2 text-(--muted)">
@@ -395,12 +447,12 @@ export function ChatWidget() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about sales…"
+          placeholder={retryBlocked ? `Wait ${retryLeftSec}s…` : 'Ask about sales…'}
           className="flex-1 rounded-md border border-(--line) px-2 py-2 text-sm"
         />
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || retryBlocked}
           className="rounded-md bg-(--accent) px-3 text-sm text-white disabled:opacity-50"
         >
           Send

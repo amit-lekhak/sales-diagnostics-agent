@@ -1,6 +1,11 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import {
+  classifyProviderError,
+  isFailOpenCode,
+  type ClassifiedError,
+} from './provider-errors';
 import { addSpan } from './tracer';
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
@@ -34,7 +39,8 @@ export const SCOPE_REFUSAL_TEXT =
 
 export type TopicDecision =
   | { allowed: true; reason?: string; failedOpen?: boolean }
-  | { allowed: false; reason: string };
+  | { allowed: false; reason: string }
+  | { allowed: false; providerError: ClassifiedError };
 
 export async function classifyTopic(
   message: string,
@@ -73,7 +79,21 @@ export async function classifyTopic(
 
     return decision;
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    const classified = classifyProviderError(err);
+    if (isFailOpenCode(classified.code)) {
+      await addSpan({
+        runId,
+        kind: 'guard',
+        name: 'topic_classifier',
+        startedAt,
+        endedAt: new Date(),
+        payloadIn: { message },
+        payloadOut: { allowed: true, failedOpen: true, code: classified.code },
+        error: classified.raw,
+      });
+      // Fail-open so a guard blip does not brick chat.
+      return { allowed: true, failedOpen: true, reason: classified.raw };
+    }
     await addSpan({
       runId,
       kind: 'guard',
@@ -81,10 +101,9 @@ export async function classifyTopic(
       startedAt,
       endedAt: new Date(),
       payloadIn: { message },
-      payloadOut: { allowed: true, failedOpen: true },
-      error,
+      payloadOut: { allowed: false, providerError: classified },
+      error: classified.raw,
     });
-    // Fail-open so a guard blip does not brick chat.
-    return { allowed: true, failedOpen: true, reason: error };
+    return { allowed: false, providerError: classified };
   }
 }

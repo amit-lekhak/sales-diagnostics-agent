@@ -2,6 +2,11 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { ChatScope, PageContext } from '../page-context';
+import {
+  classifyProviderError,
+  isFailOpenCode,
+  type ClassifiedError,
+} from './provider-errors';
 import { addSpan } from './tracer';
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
@@ -43,7 +48,8 @@ export type SlotFillResult =
   | { action: 'clarify'; text: string; slots: FilledSlots }
   | { action: 'soft_refuse'; text: string; slots: FilledSlots }
   | { action: 'ready'; slots: FilledSlots }
-  | { action: 'fail_open'; slots: null; reason: string };
+  | { action: 'fail_open'; slots: null; reason: string }
+  | { action: 'provider_error'; slots: null; classified: ClassifiedError };
 
 const SLOT_SYSTEM = `You extract structured slots for Northstar Mart's sales diagnostics chat.
 Do not answer the user. Only fill the schema.
@@ -214,7 +220,20 @@ export async function fillSlots(input: {
 
     return decided;
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    const classified = classifyProviderError(err);
+    if (isFailOpenCode(classified.code)) {
+      await addSpan({
+        runId: input.runId,
+        kind: 'guard',
+        name: 'slot_filler',
+        startedAt,
+        endedAt: new Date(),
+        payloadIn: { message: input.message },
+        payloadOut: { action: 'fail_open', failedOpen: true, code: classified.code },
+        error: classified.raw,
+      });
+      return { action: 'fail_open', slots: null, reason: classified.raw };
+    }
     await addSpan({
       runId: input.runId,
       kind: 'guard',
@@ -222,10 +241,10 @@ export async function fillSlots(input: {
       startedAt,
       endedAt: new Date(),
       payloadIn: { message: input.message },
-      payloadOut: { action: 'fail_open', failedOpen: true },
-      error,
+      payloadOut: { action: 'provider_error', code: classified.code },
+      error: classified.raw,
     });
-    return { action: 'fail_open', slots: null, reason: error };
+    return { action: 'provider_error', slots: null, classified };
   }
 }
 

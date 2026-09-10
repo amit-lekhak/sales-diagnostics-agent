@@ -3,6 +3,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from '../src/lib/db';
+import {
+  classifyProviderError,
+  isRateLimitCode,
+} from '../src/lib/agent/provider-errors';
 import { runAgent } from './agent';
 import { EVAL_CASES, type EvalCase, type EvalType, type Scenario } from './cases';
 import { assertSeeded, loadCatalog, resolvePage } from './catalog';
@@ -104,29 +108,21 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function isRateLimitError(message: string | undefined): boolean {
-  if (!message) return false;
-  return /quota|rate[- ]?limit|429|resource.?exhausted/i.test(message);
-}
-
-/** Parse "Please retry in 56.005s" style hints; default 60s. */
-function retryAfterMs(message: string): number {
-  const m = message.match(/retry in\s+(\d+(?:\.\d+)?)\s*s/i);
-  if (m) return Math.ceil(Number(m[1]) * 1000) + 1000;
-  return 60_000;
-}
-
 async function runAgentWithRateLimitRetry(input: {
   question: string;
   scope: EvalCase['scope'];
   page: Awaited<ReturnType<typeof resolvePage>>;
 }) {
   let agent = await runAgent(input);
-  if (agent.error && isRateLimitError(agent.error)) {
-    const wait = retryAfterMs(agent.error);
-    log(`rate limited — waiting ${Math.round(wait / 1000)}s then retrying…`);
-    await sleep(wait);
-    agent = await runAgent(input);
+  if (agent.error) {
+    const classified = classifyProviderError(agent.error);
+    const code = (agent.errorCode ?? classified.code) as typeof classified.code;
+    if (isRateLimitCode(code)) {
+      const wait = classified.retryAfterMs ?? 60_000;
+      log(`rate limited (${code}) — waiting ${Math.round(wait / 1000)}s then retrying…`);
+      await sleep(wait);
+      agent = await runAgent(input);
+    }
   }
   return agent;
 }

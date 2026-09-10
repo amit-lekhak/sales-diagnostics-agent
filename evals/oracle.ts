@@ -3,6 +3,7 @@ import { money } from '../src/lib/format';
 import { breakdown, getMetric, type MetricFilters } from '../src/lib/metrics';
 import {
   explainChange,
+  isToolFailure,
   listContextEvents,
   searchNews,
   type ToolRuntime,
@@ -26,7 +27,7 @@ export type OracleResult = {
 async function withEvalRuntime<T>(
   filters: MetricFilters,
   fn: (rt: ToolRuntime) => Promise<T>,
-): Promise<T> {
+): Promise<Exclude<T, { ok: false; error: string }>> {
   const runId = await createRun({
     conversationId: null,
     model: 'eval-oracle',
@@ -35,8 +36,11 @@ async function withEvalRuntime<T>(
   const started = Date.now();
   try {
     const out = await fn({ runId, scope: 'all', filters });
+    if (isToolFailure(out)) {
+      throw new Error(out.error);
+    }
     await finishRun(runId, { status: 'ok', latencyMs: Date.now() - started });
-    return out;
+    return out as Exclude<T, { ok: false; error: string }>;
   } catch (err) {
     await finishRun(runId, {
       status: 'error',

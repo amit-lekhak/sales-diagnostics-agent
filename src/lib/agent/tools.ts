@@ -72,12 +72,23 @@ export type LocationArgs = {
   regionName?: string;
 };
 
+export type ToolFailure = { ok: false; error: string };
+
+export function isToolFailure(value: unknown): value is ToolFailure {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    (value as { ok?: unknown }).ok === false &&
+    typeof (value as { error?: unknown }).error === 'string'
+  );
+}
+
 async function traced<T>(
   rt: ToolRuntime,
   name: string,
   input: unknown,
   fn: () => Promise<T>,
-) {
+): Promise<T | ToolFailure> {
   const started = new Date();
   try {
     const out = await fn();
@@ -91,15 +102,17 @@ async function traced<T>(
     });
     return out;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await addSpan({
       runId: rt.runId,
       kind: 'tool',
       name,
       startedAt: started,
       payloadIn: input,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
     });
-    throw err;
+    // Return to the model so the stream can continue; prompt says admit unknowns.
+    return { ok: false, error: message };
   }
 }
 

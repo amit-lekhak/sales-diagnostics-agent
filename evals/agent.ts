@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText, stepCountIs } from 'ai';
 import { buildAiTools } from '../src/lib/agent/ai-tools';
 import { systemPrompt } from '../src/lib/agent/prompts';
+import { classifyProviderError } from '../src/lib/agent/provider-errors';
 import { fillSlots } from '../src/lib/agent/slot-fill';
 import { classifyTopic, SCOPE_REFUSAL_TEXT } from '../src/lib/agent/topic-guard';
 import type { ToolRuntime } from '../src/lib/agent/tools';
@@ -19,6 +20,7 @@ export type AgentRunResult = {
   tools: ToolInvocation[];
   latencyMs: number;
   error?: string;
+  errorCode?: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -55,6 +57,20 @@ export async function runAgent(input: {
   const started = Date.now();
   try {
     const topic = await classifyTopic(input.question, runId);
+    if ('providerError' in topic && topic.providerError) {
+      await finishRun(runId, {
+        status: 'error',
+        latencyMs: Date.now() - started,
+        error: `${topic.providerError.code}: ${topic.providerError.raw}`.slice(0, 2000),
+      });
+      return {
+        text: topic.providerError.userMessage,
+        tools: [],
+        latencyMs: Date.now() - started,
+        error: topic.providerError.raw,
+        errorCode: topic.providerError.code,
+      };
+    }
     if (!topic.allowed) {
       await finishRun(runId, {
         status: 'ok',
@@ -76,6 +92,23 @@ export async function runAgent(input: {
       defaultFrom: range.from,
       defaultTo: range.to,
     });
+    if (slotsResult.action === 'provider_error') {
+      await finishRun(runId, {
+        status: 'error',
+        latencyMs: Date.now() - started,
+        error: `${slotsResult.classified.code}: ${slotsResult.classified.raw}`.slice(
+          0,
+          2000,
+        ),
+      });
+      return {
+        text: slotsResult.classified.userMessage,
+        tools: [],
+        latencyMs: Date.now() - started,
+        error: slotsResult.classified.raw,
+        errorCode: slotsResult.classified.code,
+      };
+    }
     if (slotsResult.action === 'clarify' || slotsResult.action === 'soft_refuse') {
       await finishRun(runId, {
         status: 'ok',
@@ -115,12 +148,18 @@ export async function runAgent(input: {
       latencyMs: Date.now() - started,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const classified = classifyProviderError(err);
     await finishRun(runId, {
       status: 'error',
       latencyMs: Date.now() - started,
-      error: message,
+      error: `${classified.code}: ${classified.raw}`.slice(0, 2000),
     });
-    return { text: '', tools: [], latencyMs: Date.now() - started, error: message };
+    return {
+      text: '',
+      tools: [],
+      latencyMs: Date.now() - started,
+      error: classified.raw,
+      errorCode: classified.code,
+    };
   }
 }

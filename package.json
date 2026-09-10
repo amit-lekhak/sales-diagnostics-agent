@@ -13,7 +13,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/seed.ts",
     "weather:sync": "tsx scripts/sync-weather.ts",
-    "eval": "tsx evals/runner.ts"
+    "eval": "tsx evals/runner.ts",
+    "test:provider-errors": "tsx --test src/lib/agent/provider-errors.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.64",
