@@ -237,6 +237,8 @@ export async function opsSummary(opts?: { page?: number; pageSize?: number }) {
   const page = Math.max(1, opts?.page ?? 1);
   const pageSize = opts?.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  // Chat UI always attaches a conversation; evals/oracle use conversation_id NULL.
+  const chatOnly = sql`conversation_id IS NOT NULL`;
 
   const [totals] = await sql<
     {
@@ -259,9 +261,10 @@ export async function opsSummary(opts?: { page?: number; pageSize?: number }) {
       SUM(output_tokens)::int AS tokens_out
     FROM agent_runs
     WHERE created_at > NOW() - INTERVAL '7 days'
+      AND ${chatOnly}
   `;
   const [countRow] = await sql<{ count: number }[]>`
-    SELECT COUNT(*)::int AS count FROM agent_runs
+    SELECT COUNT(*)::int AS count FROM agent_runs WHERE ${chatOnly}
   `;
   const recent = await sql<
     {
@@ -278,14 +281,17 @@ export async function opsSummary(opts?: { page?: number; pageSize?: number }) {
   >`
     SELECT id::text, created_at::text, model, status, latency_ms, input_tokens, output_tokens, error, scope
     FROM agent_runs
+    WHERE ${chatOnly}
     ORDER BY created_at DESC
     LIMIT ${pageSize} OFFSET ${offset}
   `;
   const toolFails = await sql<{ name: string; fails: number }[]>`
-    SELECT name, COUNT(*)::int AS fails
-    FROM agent_spans
-    WHERE error IS NOT NULL
-    GROUP BY name
+    SELECT s.name, COUNT(*)::int AS fails
+    FROM agent_spans s
+    JOIN agent_runs r ON r.id = s.run_id
+    WHERE s.error IS NOT NULL
+      AND r.conversation_id IS NOT NULL
+    GROUP BY s.name
     ORDER BY fails DESC
     LIMIT 12
   `;
@@ -295,6 +301,7 @@ export async function opsSummary(opts?: { page?: number; pageSize?: number }) {
            COUNT(*) FILTER (WHERE status = 'error')::int AS errors
     FROM agent_runs
     WHERE created_at > NOW() - INTERVAL '7 days'
+      AND ${chatOnly}
     GROUP BY created_at::date
     ORDER BY day
   `;

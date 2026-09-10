@@ -1,5 +1,5 @@
 import { EmptyState } from '@/components/dashboard/EmptyState';
-import { dateTime, num, spanRange } from '@/lib/format';
+import { dateTime, latency, num, spanRange } from '@/lib/format';
 import { runById, runSpans } from '@/lib/queries';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -25,8 +25,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         <p>
           <span className="text-(--muted)">Status</span> {run.status}
           {' · '}
-          <span className="text-(--muted)">Latency</span>{' '}
-          {run.latency_ms != null ? `${run.latency_ms} ms` : '—'}
+          <span className="text-(--muted)">Latency</span> {latency(run.latency_ms)}
           {' · '}
           <span className="text-(--muted)">Prompt / completion</span>{' '}
           {num(run.input_tokens ?? 0)} / {num(run.output_tokens ?? 0)}

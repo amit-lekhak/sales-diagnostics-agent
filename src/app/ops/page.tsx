@@ -1,7 +1,7 @@
 import { RunsChart } from '@/components/dashboard/BreakdownChart';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { Pagination } from '@/components/dashboard/FilterBar';
-import { dateTime } from '@/lib/format';
+import { dateTime, latency, num } from '@/lib/format';
 import { opsSummary } from '@/lib/queries';
 import { qs, spPage } from '@/lib/search';
 import Link from 'next/link';
@@ -33,21 +33,15 @@ export default async function OpsPage({
     <div>
       <h1 className="text-2xl font-semibold">Agent ops</h1>
       <p className="mt-1 text-sm text-(--muted)">
-        Last 7 days of traced chat runs, stored in Postgres.
+        Last 7 days of chat traces (evals excluded). Numbers from Postgres.
       </p>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Runs" value={String(t.runs)} />
-        <Stat label="Errors" value={String(t.errors)} />
-        <Stat
-          label="p50 latency"
-          value={t.p50 != null ? `${Math.round(t.p50)} ms` : '—'}
-        />
-        <Stat
-          label="p95 latency"
-          value={t.p95 != null ? `${Math.round(t.p95)} ms` : '—'}
-        />
-        <Stat label="Tokens in" value={String(t.tokens_in ?? 0)} />
-        <Stat label="Tokens out" value={String(t.tokens_out ?? 0)} />
+        <Stat label="Runs" value={num(t.runs)} />
+        <Stat label="Errors" value={num(t.errors)} />
+        <Stat label="p50 latency" value={latency(t.p50)} />
+        <Stat label="p95 latency" value={latency(t.p95)} />
+        <Stat label="Tokens in" value={num(t.tokens_in ?? 0)} />
+        <Stat label="Tokens out" value={num(t.tokens_out ?? 0)} />
       </div>
       {daily.length > 0 && (
         <section className="mt-6 rounded-xl border border-(--line) bg-(--panel) p-4">
@@ -94,9 +88,9 @@ export default async function OpsPage({
                     <tr key={r.id} className="border-t border-(--line)">
                       <td className="py-2 whitespace-nowrap">{dateTime(r.created_at)}</td>
                       <td>{r.status}</td>
-                      <td className="whitespace-nowrap">{r.latency_ms ?? '—'} ms</td>
+                      <td className="whitespace-nowrap">{latency(r.latency_ms)}</td>
                       <td className="whitespace-nowrap">
-                        {r.input_tokens ?? 0} / {r.output_tokens ?? 0}
+                        {num(r.input_tokens ?? 0)} / {num(r.output_tokens ?? 0)}
                       </td>
                       <td>
                         <Link className="underline" href={`/ops/${r.id}`}>

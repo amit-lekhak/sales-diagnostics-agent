@@ -43,6 +43,12 @@ function durationLabel(ms: number): string {
   return `${m}m ${Math.round(s - m * 60)}s`;
 }
 
+/** Human-friendly latency for ops KPIs and tables. */
+export function latency(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  return durationLabel(ms);
+}
+
 export function spanRange(startedAt: string, endedAt: string | null): string {
   const start = new Date(startedAt);
   if (Number.isNaN(start.getTime())) return startedAt;
