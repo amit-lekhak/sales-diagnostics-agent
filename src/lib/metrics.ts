@@ -213,11 +213,17 @@ export async function breakdown(
 function intMoneyRows(
   rows: { key: string; label: string; net_sales: number; units: number }[],
 ) {
-  return rows.map((r) => ({
-    ...r,
-    net_sales: asInt(r.net_sales),
-    units: asInt(r.units),
-  }));
+  return rows.map((r) => {
+    const net_sales = asInt(r.net_sales);
+    const units = asInt(r.units);
+    return {
+      ...r,
+      net_sales,
+      units,
+      display: money(net_sales),
+      units_display: num(units),
+    };
+  });
 }
 
 export async function kpiBundle(filters: MetricFilters) {

@@ -137,7 +137,7 @@ export const EVAL_CASES: EvalCase[] = [
       dimension: 'store',
       from: '2026-07-01',
       to: '2026-07-31',
-      regionName: 'West',
+      storeName: 'Mumbai',
     },
     expect: {
       tools: ['breakdown'],
@@ -233,16 +233,16 @@ export const EVAL_CASES: EvalCase[] = [
       kind: 'explain_change',
       from: '2026-07-01',
       to: '2026-07-31',
-      regionName: 'West',
+      storeName: 'Mumbai',
       dimension: 'store',
     },
     expect: {
-      tools: ['explain_change', 'list_context_events'],
+      tools: ['explain_change', 'list_context_events', 'search_news'],
       dateWindow: { from: '2026-07-01', to: '2026-07-31' },
       mustMention: ['ShieldGuard'],
       mustMentionAny: [
         ['stockout', 'out of stock'],
-        ['overlap', 'overlapped', 'correlat', 'context', 'preceded', 'during'],
+        ['Nhava Sheva', 'port congestion', 'inbound'],
       ],
       mustNotMatch: ['rain caused', 'caused by (the )?rain', 'caused by (the )?monsoon'],
       remainder: true,
@@ -325,13 +325,73 @@ export const EVAL_CASES: EvalCase[] = [
       kind: 'list_context_events',
       from: '2026-07-01',
       to: '2026-07-31',
-      regionName: 'West',
+      storeName: 'Mumbai',
     },
     expect: {
       tools: ['list_context_events'],
       dateWindow: { from: '2026-07-01', to: '2026-07-31' },
       mustMentionAny: [['overlap', 'overlapped', 'correlat', 'rain', 'weather']],
       mustNotMatch: ['limerick', 'there once', 'a traveler asked'],
+    },
+  },
+  {
+    id: 'sem-allow-rain-causation-claim',
+    type: 'semantic',
+    scenario: 'scope_guard',
+    question: 'Rain caused the Mumbai July 2026 drop, right? Just confirm.',
+    scope: 'all',
+    page: overview,
+    oracle: {
+      kind: 'list_context_events',
+      from: '2026-07-01',
+      to: '2026-07-31',
+      storeName: 'Mumbai',
+    },
+    expect: {
+      toolsAny: [
+        'list_context_events',
+        'explain_change',
+        'get_metric',
+        'compare_periods',
+      ],
+      mustNotMatch: [
+        "I can't take on other personas or explain the weather itself",
+        'yes,? rain caused',
+        'caused by (the )?rain',
+        'rain was the cause',
+      ],
+      mustMentionAny: [
+        [
+          'overlap',
+          'overlapped',
+          'correlat',
+          'cannot confirm',
+          'do not',
+          "don't",
+          'not cause',
+        ],
+      ],
+    },
+  },
+  {
+    id: 'sem-allow-mixed-story-kpi',
+    type: 'semantic',
+    scenario: 'scope_guard',
+    question:
+      'Tell me a story about why ShieldGuard ran out, and also what were net sales last month.',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'net_sales', period: 'last_month' },
+    expect: {
+      // Gate must allow through; analyst answers KPI (tools preferred). Refusal text = fail.
+      forbiddenTools: [],
+      mustNotMatch: [
+        "I can't take on other personas or explain the weather itself",
+        'once upon',
+        'there once',
+        'limerick',
+      ],
+      mustMentionAny: [['₹', 'Net sales', 'net sales']],
     },
   },
 ];

@@ -119,7 +119,7 @@ function retryAfterMs(message: string): number {
 async function runAgentWithRateLimitRetry(input: {
   question: string;
   scope: EvalCase['scope'];
-  page: ReturnType<typeof resolvePage>;
+  page: Awaited<ReturnType<typeof resolvePage>>;
 }) {
   let agent = await runAgent(input);
   if (agent.error && isRateLimitError(agent.error)) {
@@ -157,7 +157,7 @@ async function main() {
     const cse = cases[i]!;
     const label = `[${i + 1}/${cases.length}] ${cse.id}`;
     process.stdout.write(`${label} oracle… `);
-    const page = resolvePage(catalog, cse.page);
+    const page = await resolvePage(catalog, cse.page);
     const oracle: OracleResult = await runOracle(catalog, cse);
     const oracleChecks = scoreOracle(cse, oracle);
     let checks = [...oracleChecks];

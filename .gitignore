@@ -42,3 +42,6 @@ next-env.d.ts
 
 # eval runs
 evals/results/*.json
+
+# live behavioral battery (local only — questions, results, README)
+live_battery/

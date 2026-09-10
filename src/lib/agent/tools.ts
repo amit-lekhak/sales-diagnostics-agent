@@ -192,17 +192,22 @@ export async function explainChange(
     const contributions = nowRows
       .map((r) => {
         const prev = priorMap.get(r.key) ?? 0;
+        const delta = r.net_sales - prev;
         return {
           key: r.key,
           label: r.label,
           current: r.net_sales,
+          current_display: money(r.net_sales),
           prior: prev,
-          delta: r.net_sales - prev,
+          prior_display: money(prev),
+          delta,
+          delta_display: money(delta),
         };
       })
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
     const explained = contributions.reduce((s, c) => s + c.delta, 0);
     const totalDelta = nowTotal.value - priorTotal.value;
+    const remainder = totalDelta - explained;
     return {
       metric: 'net_sales',
       label: METRIC_DEFS.net_sales.label,
@@ -217,7 +222,8 @@ export async function explainChange(
       dimension,
       top_contributors: contributions.slice(0, 8),
       explained_delta: explained,
-      unexplained_remainder: totalDelta - explained,
+      unexplained_remainder: remainder,
+      unexplained_remainder_display: money(remainder),
       note: 'These are arithmetic contributions from slices, not proven causes.',
     };
   });

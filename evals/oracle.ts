@@ -93,7 +93,7 @@ async function runOracleSpec(
   cse: EvalCase,
 ): Promise<OracleResult> {
   if (spec.kind === 'get_metric') {
-    const filters = datesFromSpec(spec, resolveFilter(catalog, spec));
+    const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
     const row = await getMetric(spec.metric, filters);
     const ok = row.value !== 0;
     return {
@@ -109,7 +109,7 @@ async function runOracleSpec(
   }
 
   if (spec.kind === 'breakdown') {
-    const filters = datesFromSpec(spec, resolveFilter(catalog, spec));
+    const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
     const rows = await breakdown(spec.dimension, filters, 12);
     const labels = rows.map((r) => r.label);
     const displays = rows.map((r) => money(r.net_sales));
@@ -130,8 +130,8 @@ async function runOracleSpec(
   }
 
   if (spec.kind === 'get_metric_pair') {
-    const left = datesFromSpec(spec.left, resolveFilter(catalog, spec.left));
-    const right = datesFromSpec(spec.right, resolveFilter(catalog, spec.right));
+    const left = datesFromSpec(spec.left, await resolveFilter(catalog, spec.left));
+    const right = datesFromSpec(spec.right, await resolveFilter(catalog, spec.right));
     const a = await getMetric(spec.metric, left);
     const b = await getMetric(spec.metric, right);
     const relationOk =
@@ -151,14 +151,14 @@ async function runOracleSpec(
   }
 
   if (spec.kind === 'explain_change') {
-    const filters = datesFromSpec(spec, resolveFilter(catalog, spec));
+    const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
     const payload = await withEvalRuntime(filters, (rt) =>
       explainChange(rt, {
         from: filters.from,
         to: filters.to,
         dimension: spec.dimension,
-        storeId: filters.storeId,
-        regionId: filters.regionId,
+        storeName: spec.storeName,
+        regionName: spec.regionName,
       }),
     );
     const ok = payload.current_value !== 0 || payload.prior_value !== 0;
@@ -175,13 +175,13 @@ async function runOracleSpec(
   }
 
   if (spec.kind === 'list_context_events') {
-    const filters = datesFromSpec(spec, resolveFilter(catalog, spec));
+    const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
     const payload = await withEvalRuntime(filters, (rt) =>
       listContextEvents(rt, {
         from: filters.from,
         to: filters.to,
-        storeId: filters.storeId,
-        regionId: filters.regionId,
+        storeName: spec.storeName,
+        regionName: spec.regionName,
       }),
     );
     const holidayNames = payload.holidays.map((h) => h.name);
@@ -207,7 +207,7 @@ async function runOracleSpec(
     };
   }
 
-  const filters = datesFromSpec(spec, resolveFilter(catalog, spec));
+  const filters = datesFromSpec(spec, await resolveFilter(catalog, spec));
   const query = cse.expect.retrievalQuery ?? spec.query;
   const payload = await withEvalRuntime(filters, (rt) =>
     searchNews(rt, { query, from: filters.from, to: filters.to }),

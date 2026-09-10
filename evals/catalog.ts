@@ -1,5 +1,6 @@
 import { sql } from '../src/lib/db';
 import { defaultRange } from '../src/lib/dates';
+import { resolvePlace } from '../src/lib/dimensions';
 import type { MetricFilters } from '../src/lib/metrics';
 import type { PageContext } from '../src/lib/page-context';
 import type { FilterSpec, PageSpec } from './cases';
@@ -43,31 +44,43 @@ export async function loadCatalog(): Promise<Catalog> {
   };
 }
 
-export function resolveFilter(catalog: Catalog, spec: FilterSpec): MetricFilters {
+/** Same place resolution as the live agent (city shortcuts like Mumbai). */
+export async function resolveFilter(
+  _catalog: Catalog,
+  spec: FilterSpec,
+): Promise<MetricFilters> {
   const fallback = defaultRange();
-  const store = spec.storeName ? catalog.stores.get(spec.storeName) : undefined;
-  if (spec.storeName && !store) {
+  const place = await resolvePlace({
+    storeName: spec.storeName,
+    regionName: spec.regionName,
+  });
+  if (spec.storeName && place.storeId == null && !place.city) {
     throw new Error(`Unknown store "${spec.storeName}"`);
   }
-  const regionId = spec.regionName ? catalog.regions.get(spec.regionName) : undefined;
-  if (spec.regionName && regionId == null) {
+  if (spec.regionName && place.regionId == null) {
     throw new Error(`Unknown region "${spec.regionName}"`);
   }
   return {
     from: spec.from ?? fallback.from,
     to: spec.to ?? fallback.to,
-    storeId: store?.id,
-    regionId,
+    storeId: place.storeId,
+    regionId: place.regionId,
+    city: place.city,
   };
 }
 
-export function resolvePage(catalog: Catalog, spec: PageSpec): PageContext {
-  const store = spec.storeName ? catalog.stores.get(spec.storeName) : undefined;
-  if (spec.storeName && !store) {
+export async function resolvePage(
+  _catalog: Catalog,
+  spec: PageSpec,
+): Promise<PageContext> {
+  const place = await resolvePlace({
+    storeName: spec.storeName,
+    regionName: spec.regionName,
+  });
+  if (spec.storeName && place.storeId == null && !place.city) {
     throw new Error(`Unknown store "${spec.storeName}"`);
   }
-  const regionId = spec.regionName ? catalog.regions.get(spec.regionName) : undefined;
-  if (spec.regionName && regionId == null) {
+  if (spec.regionName && place.regionId == null) {
     throw new Error(`Unknown region "${spec.regionName}"`);
   }
   return {
@@ -75,7 +88,7 @@ export function resolvePage(catalog: Catalog, spec: PageSpec): PageContext {
     pathname: spec.pathname,
     from: spec.from,
     to: spec.to,
-    storeId: store?.id,
-    regionId,
+    storeId: place.storeId,
+    regionId: place.regionId,
   };
 }

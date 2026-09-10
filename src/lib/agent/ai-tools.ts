@@ -41,7 +41,7 @@ export function buildAiTools(rt: ToolRuntime) {
     }),
     breakdown: tool({
       description:
-        'Break a period of net sales into region, store, or SKU slices. Use dimension=store for store or city questions; sku only when asked about products.',
+        'Break a period of net sales into region, store, or SKU slices. Each row includes display (quote exactly) and units_display. Use dimension=store for store or city questions; sku only when asked about products.',
       inputSchema: z.object({
         dimension: z.enum(['region', 'store', 'sku']),
         period: periodEnum,
