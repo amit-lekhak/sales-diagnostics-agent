@@ -92,7 +92,7 @@ Topic / slot **fail-open** only on provider codes `timeout` and `transient` (`is
 | `GEMINI_API_KEY`               | (required for LLM)                    | Chat + embeddings; copied to `GOOGLE_GENERATIVE_AI_API_KEY` if unset |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | -                                     | SDK alias                                                            |
 | `GEMINI_MODEL`                 | `gemini-3.1-flash-lite`               | Analyst / gate model                                                 |
-| `TOPIC_GUARD_TIMEOUT_MS`       | `8000`                                | Topic `generateObject`                                               |
+| `TOPIC_GUARD_TIMEOUT_MS`       | `15000`                               | Topic `generateObject`                                               |
 | `SLOT_FILL_TIMEOUT_MS`         | `8000`                                | Slot `generateObject`                                                |
 | `CHAT_ANALYST_TIMEOUT_MS`      | `45000`                               | Analyst abort cap                                                    |
 | `CHAT_ROUTE_BUDGET_MS`         | `58000`                               | Soft ceiling for whole request                                       |

@@ -30,7 +30,7 @@ Use the chat to explain a period drop with store contributors, company events, n
    - Events / news (stockout, promo, port congestion) preferred over weather-as-cause
    - An unexplained remainder when the slice does not fully account for the change
 
-5. Open **Trace / sources** on the assistant message to confirm tools such as `explain_change`, `list_context_events`, and `search_news`.
+5. Check inline **Sources** for SQL/news citations, or open **Trace** on the assistant message to confirm tools such as `explain_change`, `list_context_events`, and `search_news`.
 
 ## Verification
 

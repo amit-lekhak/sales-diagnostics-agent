@@ -467,7 +467,7 @@ export function ChatWidget() {
           className="underline"
           onClick={() => setShowTrace((v) => !v)}
         >
-          {showTrace ? 'Hide trace' : 'Trace / sources'}
+          {showTrace ? 'Hide trace' : 'Trace'}
         </button>
       </div>
       {showTrace && (

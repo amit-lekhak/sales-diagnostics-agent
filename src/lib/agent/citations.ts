@@ -13,20 +13,29 @@ const METRIC_LABELS: Record<string, string> = {
   aov: 'Average order value',
 };
 
+/** Tool names that produce analyst-facing evidence (SQL / news / context). */
+const EVIDENCE_TOOLS = new Set([
+  'get_metric',
+  'breakdown',
+  'compare_periods',
+  'explain_change',
+  'list_context_events',
+  'search_news',
+]);
+
+/**
+ * Build analyst-facing citation lines from run spans.
+ * Only successful tool evidence is included — guard/llm/error spans stay on Trace / ops.
+ */
 export function citationsFromSpans(spans: TraceSpan[]): string[] {
   const lines: string[] = [];
   for (const span of spans) {
-    if (span.error) {
-      lines.push(`${span.name} failed: ${span.error}`);
-      continue;
-    }
+    if (span.error) continue;
+    if (!EVIDENCE_TOOLS.has(span.name)) continue;
+
     const out = asRecord(span.output);
-    if (!out) {
-      if (span.kind === 'llm' || span.kind === 'summarize' || span.kind === 'embed') {
-        lines.push(`${span.kind}: ${span.name}`);
-      }
-      continue;
-    }
+    if (!out) continue;
+
     if (span.name === 'get_metric' && out.metric != null) {
       const label = metricLabel(out);
       const shown = typeof out.display === 'string' ? out.display : fmtMoney(out.value);
@@ -75,8 +84,6 @@ export function citationsFromSpans(spans: TraceSpan[]): string[] {
         .filter(Boolean)
         .join('; ');
       lines.push(`News (pgvector): ${titles || 'no matches'}`);
-    } else {
-      lines.push(`${span.kind}/${span.name}`);
     }
   }
   return lines;

@@ -53,7 +53,7 @@ Open http://localhost:3000. You should see Overview KPIs (Net sales, Units, AOV)
 2. Click the suggested chip **What were net sales last month?** (or type it).
 3. Send.
 
-You should get a reply that includes a rupee amount from the semantic layer (for example matching last-month net sales on Overview when dates align). Open **Trace / sources** under the reply to see which tools ran.
+You should get a reply that includes a rupee amount from the semantic layer (for example matching last-month net sales on Overview when dates align). Open **Trace** under the reply to see which tools ran; inline **Sources** cites SQL/news evidence only.
 
 ## What you built
 

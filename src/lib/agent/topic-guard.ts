@@ -10,7 +10,7 @@ import {
 import { addSpan } from './tracer';
 
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
-const CLASSIFIER_TIMEOUT_MS = Number(process.env.TOPIC_GUARD_TIMEOUT_MS ?? 8_000);
+const CLASSIFIER_TIMEOUT_MS = Number(process.env.TOPIC_GUARD_TIMEOUT_MS ?? 15_000);
 
 const decisionSchema = z.object({
   allowed: z.boolean(),
@@ -87,8 +87,13 @@ export async function classifyTopic(
         startedAt,
         endedAt: new Date(),
         payloadIn: { message },
-        payloadOut: { allowed: true, failedOpen: true, code: classified.code },
-        error: classified.raw,
+        payloadOut: {
+          allowed: true,
+          failedOpen: true,
+          code: classified.code,
+          raw: classified.raw,
+        },
+        error: classified.code,
       });
       // Fail-open so a guard blip does not brick chat.
       return { allowed: true, failedOpen: true, reason: classified.raw };
@@ -101,7 +106,7 @@ export async function classifyTopic(
       endedAt: new Date(),
       payloadIn: { message },
       payloadOut: { allowed: false, providerError: classified },
-      error: classified.raw,
+      error: classified.code,
     });
     return { allowed: false, providerError: classified };
   }
