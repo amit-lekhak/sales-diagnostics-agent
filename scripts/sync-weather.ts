@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../src/lib/load-env';
 import { closeWeatherSql, runWeatherSync } from '../src/lib/weather/openweather';
 
 runWeatherSync()

@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { config } from 'dotenv';
-import { resolve } from 'node:path';
-
-config({ path: resolve(process.cwd(), '.env.local') });
+import './load-env';
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 

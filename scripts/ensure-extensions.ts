@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../src/lib/load-env';
 import { sql } from '../src/lib/db';
 
 async function main() {

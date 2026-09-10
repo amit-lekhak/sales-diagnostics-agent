@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../src/lib/load-env';
 import { addDays, format, parseISO } from 'date-fns';
 import postgres from 'postgres';
 import { embedTexts, toVectorLiteral } from '../src/lib/embeddings';
