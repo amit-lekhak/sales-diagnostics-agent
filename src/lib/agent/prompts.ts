@@ -1,18 +1,22 @@
 import { lastMonth, lastQuarter } from '../dates';
 import { describePageContext, type ChatScope, type PageContext } from '../page-context';
 import { METRIC_DEFS } from '../metrics';
+import type { FilledSlots } from './slot-fill';
+import { formatSlotsForPrompt } from './slot-fill';
 
 export function systemPrompt(
   scope: ChatScope,
   page: PageContext,
   filters: { from: string; to: string },
   dimensions: string,
+  slots?: FilledSlots | null,
 ) {
   const metrics = Object.values(METRIC_DEFS)
     .map((m) => `- ${m.label}: ${m.description}`)
     .join('\n');
   const month = lastMonth();
   const quarter = lastQuarter();
+  const slotsBlock = slots ? `\n${formatSlotsForPrompt(slots)}\n` : '';
   return `You are the Northstar Mart sales diagnostics analyst.
 
 Rules:
@@ -33,11 +37,12 @@ ${metrics}
 - When the user names a store, city, or region, pass storeName or regionName on tools. Do not query company-wide.
 - When asked how stores did, call breakdown with dimension=store (not sku).
 - For search_news, omit from/to unless the user named dates. For list_context_events and metrics, pass from/to when they named a window.
+- Trust filled slots below for place/window/metric. If defaults were applied, name that place/window in the answer — do not silently diagnose a vague "why did sales drop?" company-wide.
 - Current user scope: ${describePageContext(page, scope)}.
-- Default date window if the user is vague: ${filters.from} to ${filters.to}.
+- Page/default date window (use when slots say so): ${filters.from} to ${filters.to}.
 - "Last month" is ${month.from} to ${month.to}. Pass period="last_month" on tools — do not guess dates.
 - "Last quarter" is ${quarter.from} to ${quarter.to}. Pass period="last_quarter".
 - If scope is "This page", keep the page store/region filters. "All data" is company-wide unless the user names a store.
-
+${slotsBlock}
 ${dimensions}`;
 }

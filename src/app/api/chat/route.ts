@@ -7,6 +7,7 @@ import type { ChatScope, PageContext } from '@/lib/page-context';
 import { buildAiTools } from '@/lib/agent/ai-tools';
 import { systemPrompt } from '@/lib/agent/prompts';
 import { loadConversationContext, maybeSummarize } from '@/lib/agent/summarize';
+import { fillSlots } from '@/lib/agent/slot-fill';
 import { classifyTopic, SCOPE_REFUSAL_TEXT } from '@/lib/agent/topic-guard';
 import type { ToolRuntime } from '@/lib/agent/tools';
 import {
@@ -121,6 +122,46 @@ export async function POST(req: Request) {
   }
 
   const history = await loadConversationContext(convId);
+  // Current user message is already persisted; use prior turns for slot inheritance.
+  const prior = history.recent.slice(0, -1);
+  const recentTurns = prior.slice(-4);
+  const slotsResult = await fillSlots({
+    message: body.message,
+    runId,
+    recentTurns,
+    scope,
+    page,
+    defaultFrom: range.from,
+    defaultTo: range.to,
+  });
+
+  if (slotsResult.action === 'clarify' || slotsResult.action === 'soft_refuse') {
+    const text = slotsResult.text;
+    const [msg] = await sql<{ id: string }[]>`
+      INSERT INTO messages (conversation_id, role, content, scope, page_context, run_id)
+      VALUES (${convId}::uuid, 'assistant', ${text}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
+      RETURNING id::text AS id
+    `;
+    await finishRun(runId, {
+      status: 'ok',
+      latencyMs: Date.now() - started,
+      messageId: msg!.id,
+    });
+    await sql`
+      UPDATE conversations SET updated_at = NOW(), last_page_context = ${jsonb(page)}
+      WHERE id = ${convId}::uuid
+    `;
+    await exportLangfuse({
+      id: runId,
+      model: MODEL,
+      status: 'ok',
+      latencyMs: Date.now() - started,
+    });
+    return Response.json({ conversationId: convId, runId, text });
+  }
+
+  const filledSlots = slotsResult.action === 'ready' ? slotsResult.slots : null;
+
   const dimensions = formatDimensionsPrompt(await loadDimensions());
   const messages = [
     ...(history.summary
@@ -140,7 +181,7 @@ export async function POST(req: Request) {
   try {
     const result = streamText({
       model: google(MODEL),
-      system: systemPrompt(scope, page, range, dimensions),
+      system: systemPrompt(scope, page, range, dimensions, filledSlots),
       messages,
       stopWhen: stepCountIs(8),
       tools: buildAiTools(rt),

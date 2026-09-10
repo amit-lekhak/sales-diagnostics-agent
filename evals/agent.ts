@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText, stepCountIs } from 'ai';
 import { buildAiTools } from '../src/lib/agent/ai-tools';
 import { systemPrompt } from '../src/lib/agent/prompts';
+import { fillSlots } from '../src/lib/agent/slot-fill';
 import { classifyTopic, SCOPE_REFUSAL_TEXT } from '../src/lib/agent/topic-guard';
 import type { ToolRuntime } from '../src/lib/agent/tools';
 import { createRun, finishRun } from '../src/lib/agent/tracer';
@@ -66,10 +67,32 @@ export async function runAgent(input: {
       };
     }
 
+    const slotsResult = await fillSlots({
+      message: input.question,
+      runId,
+      recentTurns: [],
+      scope: input.scope,
+      page: input.page,
+      defaultFrom: range.from,
+      defaultTo: range.to,
+    });
+    if (slotsResult.action === 'clarify' || slotsResult.action === 'soft_refuse') {
+      await finishRun(runId, {
+        status: 'ok',
+        latencyMs: Date.now() - started,
+      });
+      return {
+        text: slotsResult.text,
+        tools: [],
+        latencyMs: Date.now() - started,
+      };
+    }
+    const filledSlots = slotsResult.action === 'ready' ? slotsResult.slots : null;
+
     const dimensions = formatDimensionsPrompt(await loadDimensions());
     const result = await generateText({
       model: google(MODEL),
-      system: systemPrompt(input.scope, input.page, range, dimensions),
+      system: systemPrompt(input.scope, input.page, range, dimensions, filledSlots),
       messages: [{ role: 'user', content: input.question }],
       stopWhen: stepCountIs(8),
       tools: buildAiTools(rt),

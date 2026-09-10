@@ -11,7 +11,8 @@ export type Scenario =
   | 'pune_promo'
   | 'delhi_diwali'
   | 'south_competitor'
-  | 'scope_guard';
+  | 'scope_guard'
+  | 'slot_fill';
 
 export type PageSpec = {
   page: PageName;
@@ -392,6 +393,62 @@ export const EVAL_CASES: EvalCase[] = [
         'limerick',
       ],
       mustMentionAny: [['₹', 'Net sales', 'net sales']],
+    },
+  },
+  {
+    id: 'sem-clarify-vague-diagnose',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'Why did sales drop?',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'net_sales', period: 'last_month' },
+    expect: {
+      forbiddenTools: [
+        'get_metric',
+        'breakdown',
+        'compare_periods',
+        'explain_change',
+        'list_context_events',
+        'search_news',
+      ],
+      mustMentionAny: [
+        ['place', 'store', 'city', 'region', 'window', 'date', 'when', 'where'],
+      ],
+    },
+  },
+  {
+    id: 'sem-slot-kpi-last-month',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'What were net sales last month?',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'net_sales', period: 'last_month' },
+    expect: {
+      tools: ['get_metric'],
+      namedPeriod: 'last_month',
+      mustMentionAny: [['₹', 'Net sales', 'net sales']],
+    },
+  },
+  {
+    id: 'sem-soft-refuse-unknown-metric',
+    type: 'semantic',
+    scenario: 'slot_fill',
+    question: 'What was our conversion rate last month?',
+    scope: 'all',
+    page: overview,
+    oracle: { kind: 'get_metric', metric: 'net_sales', period: 'last_month' },
+    expect: {
+      forbiddenTools: [
+        'get_metric',
+        'breakdown',
+        'compare_periods',
+        'explain_change',
+        'list_context_events',
+        'search_news',
+      ],
+      mustMentionAny: [['Net sales', 'Units', 'AOV', 'units', 'aov']],
     },
   },
 ];
