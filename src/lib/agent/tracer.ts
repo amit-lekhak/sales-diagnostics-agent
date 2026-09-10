@@ -1,6 +1,6 @@
 import { sql } from '../db';
 
-export type SpanKind = 'llm' | 'tool' | 'sql' | 'embed' | 'summarize';
+export type SpanKind = 'llm' | 'tool' | 'sql' | 'embed' | 'summarize' | 'guard';
 
 export async function createRun(input: {
   conversationId: string | null;

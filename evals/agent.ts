@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText, stepCountIs } from 'ai';
 import { buildAiTools } from '../src/lib/agent/ai-tools';
 import { systemPrompt } from '../src/lib/agent/prompts';
+import { classifyTopic, SCOPE_REFUSAL_TEXT } from '../src/lib/agent/topic-guard';
 import type { ToolRuntime } from '../src/lib/agent/tools';
 import { createRun, finishRun } from '../src/lib/agent/tracer';
 import { defaultRange } from '../src/lib/dates';
@@ -52,6 +53,19 @@ export async function runAgent(input: {
   const rt: ToolRuntime = { runId, scope: input.scope, filters };
   const started = Date.now();
   try {
+    const topic = await classifyTopic(input.question, runId);
+    if (!topic.allowed) {
+      await finishRun(runId, {
+        status: 'ok',
+        latencyMs: Date.now() - started,
+      });
+      return {
+        text: SCOPE_REFUSAL_TEXT,
+        tools: [],
+        latencyMs: Date.now() - started,
+      };
+    }
+
     const dimensions = formatDimensionsPrompt(await loadDimensions());
     const result = await generateText({
       model: google(MODEL),

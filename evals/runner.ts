@@ -100,6 +100,37 @@ function log(msg: string) {
   console.log(msg);
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRateLimitError(message: string | undefined): boolean {
+  if (!message) return false;
+  return /quota|rate[- ]?limit|429|resource.?exhausted/i.test(message);
+}
+
+/** Parse "Please retry in 56.005s" style hints; default 60s. */
+function retryAfterMs(message: string): number {
+  const m = message.match(/retry in\s+(\d+(?:\.\d+)?)\s*s/i);
+  if (m) return Math.ceil(Number(m[1]) * 1000) + 1000;
+  return 60_000;
+}
+
+async function runAgentWithRateLimitRetry(input: {
+  question: string;
+  scope: EvalCase['scope'];
+  page: ReturnType<typeof resolvePage>;
+}) {
+  let agent = await runAgent(input);
+  if (agent.error && isRateLimitError(agent.error)) {
+    const wait = retryAfterMs(agent.error);
+    log(`rate limited — waiting ${Math.round(wait / 1000)}s then retrying…`);
+    await sleep(wait);
+    agent = await runAgent(input);
+  }
+  return agent;
+}
+
 async function main() {
   const flags = parseFlags(process.argv.slice(2));
   if (!process.env.GEMINI_API_KEY) {
@@ -120,6 +151,7 @@ async function main() {
       'Full suite often takes 3–5 minutes; each case logs as it finishes.',
   );
 
+  const paceMs = Number(process.env.EVAL_CASE_PACE_MS ?? 4000);
   const reports: CaseReport[] = [];
   for (let i = 0; i < cases.length; i++) {
     const cse = cases[i]!;
@@ -134,8 +166,9 @@ async function main() {
     let pass = oracleChecks.every((c) => c.ok);
 
     if (!flags.skipAgent) {
+      if (i > 0 && paceMs > 0) await sleep(paceMs);
       process.stdout.write('agent… ');
-      const agent = await runAgent({
+      const agent = await runAgentWithRateLimitRetry({
         question: cse.question,
         scope: cse.scope,
         page,

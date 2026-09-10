@@ -7,6 +7,7 @@ import type { ChatScope, PageContext } from '@/lib/page-context';
 import { buildAiTools } from '@/lib/agent/ai-tools';
 import { systemPrompt } from '@/lib/agent/prompts';
 import { loadConversationContext, maybeSummarize } from '@/lib/agent/summarize';
+import { classifyTopic, SCOPE_REFUSAL_TEXT } from '@/lib/agent/topic-guard';
 import type { ToolRuntime } from '@/lib/agent/tools';
 import {
   addSpan,
@@ -91,6 +92,32 @@ export async function POST(req: Request) {
       messageId: msg!.id,
     });
     return Response.json({ conversationId: convId, runId, text, error: 'missing_key' });
+  }
+
+  const topic = await classifyTopic(body.message, runId);
+  if (!topic.allowed) {
+    const text = SCOPE_REFUSAL_TEXT;
+    const [msg] = await sql<{ id: string }[]>`
+      INSERT INTO messages (conversation_id, role, content, scope, page_context, run_id)
+      VALUES (${convId}::uuid, 'assistant', ${text}, ${scope}, ${jsonb(page)}, ${runId}::uuid)
+      RETURNING id::text AS id
+    `;
+    await finishRun(runId, {
+      status: 'ok',
+      latencyMs: Date.now() - started,
+      messageId: msg!.id,
+    });
+    await sql`
+      UPDATE conversations SET updated_at = NOW(), last_page_context = ${jsonb(page)}
+      WHERE id = ${convId}::uuid
+    `;
+    await exportLangfuse({
+      id: runId,
+      model: MODEL,
+      status: 'ok',
+      latencyMs: Date.now() - started,
+    });
+    return Response.json({ conversationId: convId, runId, text });
   }
 
   const history = await loadConversationContext(convId);
